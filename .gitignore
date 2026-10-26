@@ -1,0 +1,31 @@
+.tools/
+.local/
+.runtime/
+data/
+backend/target/
+backend/src/main/resources/static/
+frontend/node_modules/
+frontend/dist/
+.env.local
+*.log
+
+# Generated desktop launcher binaries (rebuild from tracked source)
+/tools/backend-launcher/*.exe
+/tools/backend-launcher/*.ico
+
+# Local credentials, environment overrides and backups
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+*.jks
+*.keystore
+*.dump
+*.sql.gz
+/backups/
+.DS_Store
+Thumbs.db
+
