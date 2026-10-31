@@ -22,6 +22,7 @@ public class SecurityConfig {
     SecurityFilterChain filterChain(HttpSecurity http,CommunityStore store,cn.haiyan.platform.service.IdentityService identities) throws Exception {
         return http
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.HEAD, "/", "/index.html", "/assets/**", "/brand/**", "/favicon.svg").permitAll()
                         .requestMatchers(HttpMethod.GET, "/", "/index.html", "/assets/**", "/brand/**", "/favicon.svg",
                                 "/api/public/**", "/api/auth/me", "/api/auth/csrf", "/api/auth/registration-options", "/api/auth/remembered", "/api/media/**", "/actuator/health").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/quick-login", "/api/auth/remembered/forget", "/api/auth/register", "/api/auth/verification-code", "/api/auth/password-reset/code", "/api/auth/password-reset").permitAll()

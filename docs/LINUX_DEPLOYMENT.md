@@ -144,7 +144,7 @@ server {
 
 创建 challenge 目录，使用官方支持当前发行版的 Certbot/ACME 客户端签发域名证书，webroot 为 /var/www/haiyan-acme，也可用 DNS 验证。具体安装命令在服务器确认后决定，不执行未知的 curl|bash 安装脚本。
 
-证书就绪后，将 haiyan-proxy.inc 放到 /etc/nginx/，替换 nginx-https.conf.example 的域名/证书路径，放入 Nginx 实际加载的 http include 目录；`nginx -t` 成功再 reload。移走临时同名 80 站点，避免重复 server，不误删其他站点。
+证书就绪后，将 haiyan-proxy.inc、haiyan-static.inc 和 haiyan-performance.conf 放到 /etc/nginx/。把与 JAR 同次构建的 frontend/dist/assets、brand 和 favicon.svg 复制到 root 管理、Nginx 可读的 /var/www/haiyan，用户数据和配置不得放入这个公开目录；保留上一版指纹资源以兼容已打开页面。替换 nginx-https.conf.example 的域名/证书路径，放入实际加载的 http include 目录；模板要求 Nginx 1.25.1 及以后并启用 HTTP/2 模块。`nginx -t` 成功再 reload。移走临时同名 80 站点，避免重复 server，不误删其他站点。详细缓存和压缩策略见 PERFORMANCE.md。
 
 HTTP 自动跳 HTTPS。Nginx 覆盖转发来源头，应用仅信任回环代理，才能识别 HTTPS、设置安全 cookie 并避免伪造来源。若以后增加 CDN，要重新设计可信代理链。模板不缓存身份相关 API/受限媒体，上传上限 25MB，上游超时 120 秒；登录及发信返回 429 的限流需考虑校园网共享出口，按实际使用调整。
 

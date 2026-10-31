@@ -4,7 +4,9 @@
 
 ## Linux 正式部署
 
-已按阿里云首尔、Alibaba Cloud Linux 4、2 核 2GB、40GB 配置准备[上云方案](docs/CLOUD_DEPLOYMENT_PLAN.md)、[部署与数据迁移手册](docs/LINUX_DEPLOYMENT.md)及 `deploy/linux/` 配置模板。云端程序以 GitHub 明确提交为准，现有账号和文章通过数据库恢复，图片与 QQ 名单另行私有迁移；模板不包含真实凭据，目前尚未连接远程服务器。
+已按阿里云首尔、Alibaba Cloud Linux 4、2 核 2GB、40GB 配置准备[上云方案](docs/CLOUD_DEPLOYMENT_PLAN.md)、[部署与数据迁移手册](docs/LINUX_DEPLOYMENT.md)及 `deploy/linux/` 配置模板。云端程序以 GitHub 明确提交为准，目前通过域名 HTTPS 提供服务。账号、文章、图片、QQ 名单和生产凭据独立保存在服务器，代码更新不使用本地数据库覆盖线上数据；模板不包含真实凭据。
+
+本地生产 JAR 与云端静态缓存、压缩、品牌缩略图和 Nginx HTTP/2 的配置及发布方法见[性能说明](docs/PERFORMANCE.md)。
 
 当前已完成可运行的本地业务原型：社员通过账号、密码、QQ 号与验证码注册，使用笔名写作，保存草稿、导入文档、插入图片并发布；访客浏览公开作品，社员可以点赞、收藏与评论。首页采用纸白、松绿和宋体排版，适配电脑与手机。
 
