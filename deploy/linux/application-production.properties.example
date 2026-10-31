@@ -1,0 +1,27 @@
+# Copy to /etc/haiyan/application-production.properties with mode 0640, root:haiyan.
+# Replace every CHANGE_ME before starting the service. Never commit the real file.
+spring.datasource.url=jdbc:mysql://127.0.0.1:3306/haiyan_chuanxin?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+spring.datasource.username=haiyan_app
+spring.datasource.password=CHANGE_ME_DATABASE_PASSWORD
+spring.datasource.hikari.maximum-pool-size=5
+spring.datasource.hikari.minimum-idle=1
+
+server.address=127.0.0.1
+server.port=8091
+server.forward-headers-strategy=NATIVE
+server.tomcat.remoteip.internal-proxies=127\\.0\\.0\\.1|::1|0:0:0:0:0:0:0:1
+server.tomcat.threads.max=30
+server.tomcat.threads.min-spare=2
+server.servlet.session.cookie.http-only=true
+server.servlet.session.cookie.same-site=lax
+server.servlet.session.cookie.secure=true
+server.shutdown=graceful
+spring.lifecycle.timeout-per-shutdown-phase=30s
+
+haiyan.qq-whitelist-dir=/var/lib/haiyan/QQ_Whitelist
+haiyan.mail.username=CHANGE_ME_SENDER@qq.com
+haiyan.mail.password=CHANGE_ME_SMTP_AUTHORIZATION_CODE
+haiyan.mail.realm-config=/etc/haiyan/no-realm-fallback.properties
+
+# Required only when initializing an empty database. A restored database retains accounts.
+platform.bootstrap.password=CHANGE_ME_RANDOM_BOOTSTRAP_PASSWORD_AT_LEAST_16_CHARACTERS

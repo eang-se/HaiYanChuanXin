@@ -21,12 +21,14 @@ import static cn.haiyan.platform.service.CommunityService.*;
 
 @RestController
 public class UploadController {
-    private final CommunityService s; private final AccountPermissions permissions;private final Semaphore parsers=new Semaphore(2);
+    private final CommunityService s; private final AccountPermissions permissions;private final Semaphore parsers=new Semaphore(2),images=new Semaphore(1);
     private final Path root=Path.of("data","images").toAbsolutePath().normalize();
     public UploadController(CommunityService s,AccountPermissions permissions){this.s=s;this.permissions=permissions;}
     @PostMapping("/api/member/images")public Map<String,String> image(@RequestParam MultipartFile file,Principal p)throws IOException{
         permissions.require(p.getName(),"UPLOAD");
         if(file.isEmpty()||file.getSize()>5*1024*1024)throw error(400,"图片需在 5 MB 以内，支持 PNG、JPEG");
+        if(!images.tryAcquire())throw error(429,"已有图片正在处理，请稍后重试");
+        try {
         BufferedImage source;
         try(var stream=ImageIO.createImageInputStream(file.getInputStream())) {
             var readers=ImageIO.getImageReaders(stream);if(!readers.hasNext())throw error(400,"无法识别图片，请上传 PNG 或 JPEG");
@@ -44,12 +46,13 @@ public class UploadController {
         ImageIO.write(output,"jpg",target.toFile());
         try{s.store().update("INSERT INTO media_files(id,owner_id,original_name,file_path,mime_type,size_bytes) VALUES(?,?,?,?,?,?)",id,s.memberId(p.getName()),bounded(file.getOriginalFilename(),200,"文件名"),name,"image/jpeg",Files.size(target));}
         catch(RuntimeException ex){Files.deleteIfExists(target);throw ex;}
-        return Map.of("url","/api/media/"+id);
+        return Map.of("url","/api/media/"+id,"width",String.valueOf(output.getWidth()),"height",String.valueOf(output.getHeight()));
+        } finally { images.release(); }
     }
     @GetMapping("/api/media/{id}")public ResponseEntity<FileSystemResource> media(@PathVariable String id,Principal p){
         var row=s.store().one("SELECT * FROM media_files WHERE id=?",id);if(row==null)throw error(404,"图片不存在");
         boolean own=p!=null&&Objects.equals(row.get("ownerId"),s.member(p.getName()).get("id"));
-        if(!own&&s.store().count("SELECT COUNT(*) FROM work_media wm JOIN works w ON w.id=wm.work_id WHERE wm.media_id=? AND w.status='PUBLISHED'",id)==0&&s.store().count("SELECT COUNT(*) FROM members WHERE avatar_url=?","/api/media/"+id)==0)throw error(404,"图片尚未公开");
+        if(!own&&s.store().count("SELECT COUNT(*) FROM work_media wm JOIN works w ON w.id=wm.work_id WHERE wm.media_id=? AND w.status='PUBLISHED'",id)==0)throw error(404,"图片尚未公开");
         Path target=root.resolve((String)row.get("filePath")).normalize();if(!target.startsWith(root))throw error(404,"图片不存在");
         return ResponseEntity.ok().contentType(MediaType.IMAGE_JPEG).cacheControl(CacheControl.noStore()).body(new FileSystemResource(target));
     }

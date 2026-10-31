@@ -1,3 +1,3 @@
 package cn.haiyan.platform.service;
-/** 可替换为学校社员系统或导入的 QQ 名册。 */
-public interface QqEligibility { boolean accepts(String qq); }
+/** QQ membership and optional roster name provider. */
+public interface QqEligibility { boolean accepts(String qq); default String displayName(String qq){return null;} }

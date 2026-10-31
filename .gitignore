@@ -1,5 +1,6 @@
 .tools/
 .local/
+QQ_Whitelist/
 .runtime/
 data/
 backend/target/
@@ -28,4 +29,11 @@ frontend/dist/
 /backups/
 .DS_Store
 Thumbs.db
+
+# Local reports, temporary imports and production-only configuration
+/output/
+/tmp/
+/frontend/playwright-report/
+/frontend/test-results/
+/deploy/linux/application-production.properties
 

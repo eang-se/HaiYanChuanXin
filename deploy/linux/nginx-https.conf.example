@@ -1,0 +1,43 @@
+# Install inside Nginx's http context after replacing example.com and certificate paths.
+# Keep the upstream private. Do not proxy untrusted forwarding headers unchanged.
+limit_req_zone $binary_remote_addr zone=haiyan_login:1m rate=30r/m;
+limit_req_zone $binary_remote_addr zone=haiyan_mail:1m rate=2r/m;
+
+server {
+    listen 80;
+    server_name example.com;
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/haiyan-acme;
+    }
+    location / {
+        return 308 https://example.com$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name example.com;
+    ssl_certificate /etc/letsencrypt/live/example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    client_max_body_size 25m;
+    limit_req_status 429;
+
+    location = /actuator/health {
+        return 404;
+    }
+
+    location ~ ^/api/auth/(login|quick-login|register|password-reset)$ {
+        limit_req zone=haiyan_login burst=20 nodelay;
+        include /etc/nginx/haiyan-proxy.inc;
+    }
+
+    location ~ ^/api/auth/(verification-code|password-reset/code)$ {
+        limit_req zone=haiyan_mail burst=5 nodelay;
+        include /etc/nginx/haiyan-proxy.inc;
+    }
+
+    location / {
+        include /etc/nginx/haiyan-proxy.inc;
+    }
+}

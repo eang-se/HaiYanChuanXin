@@ -1,0 +1,10 @@
+[mysqld]
+bind-address=127.0.0.1
+mysqlx-bind-address=127.0.0.1
+innodb_dedicated_server=OFF
+innodb_buffer_pool_size=128M
+max_connections=30
+tmp_table_size=16M
+max_heap_table_size=16M
+temptable_max_ram=64M
+slow_query_log=OFF

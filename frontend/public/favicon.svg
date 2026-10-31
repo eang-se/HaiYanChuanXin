@@ -1,1 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="#214d43"/><path d="M12 20 32 29 52 15 40 34 48 49 30 40 15 49 22 33Z" fill="#f7f5ef"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 286" role="img" aria-label="海燕">
+  <title>海燕</title>
+  <!-- Vector redraw of the bird in the lower right of the literary society seal. -->
+  <path fill="#214d43" d="M16 57C36 40 55 44 69 57L82 78C88 81 93 77 94 70C95 43 108 32 144 32L181 34C218 35 260 22 289 10C263 28 221 37 184 38L165 52L137 76L155 89L143 110C190 111 249 126 289 132C253 134 215 145 165 158L179 175L169 189L197 208C204 215 204 223 200 234C197 246 199 255 208 268L204 271C168 238 138 211 105 185L51 143C25 126 20 108 20 86L22 66Z"/>
+  <path d="M179 166C211 151 246 142 287 141M187 174C220 158 253 150 280 150M192 184C209 176 229 169 246 166" fill="none" stroke="#214d43" stroke-width="4" stroke-linecap="round"/>
+</svg>

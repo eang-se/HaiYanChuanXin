@@ -1,0 +1,30 @@
+[Unit]
+Description=HaiYanChuanXin literature platform
+Wants=network-online.target
+After=network-online.target mysqld.service mysql.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=exec
+User=haiyan
+Group=haiyan
+WorkingDirectory=/var/lib/haiyan
+ExecStart=/usr/bin/java -Xms128m -Xmx512m -XX:ActiveProcessorCount=2 -Djava.awt.headless=true -jar /opt/haiyan/current/app.jar --spring.profiles.active=production --spring.config.additional-location=file:/etc/haiyan/application-production.properties
+Restart=on-failure
+RestartSec=10
+SuccessExitStatus=143
+TimeoutStopSec=60
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/haiyan
+MemoryHigh=850M
+MemoryMax=1G
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
