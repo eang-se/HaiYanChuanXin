@@ -25,26 +25,11 @@ export function articleFragment(html: string): DocumentFragment {
     }
     if (!image.hasAttribute('width') || !image.hasAttribute('height')) { image.removeAttribute('width'); image.removeAttribute('height') }
   }
-  for (const nested of fragment.querySelectorAll('details details')) {
-    for (const title of nested.querySelectorAll(':scope > summary')) {
-      const p = document.createElement('p'); p.append(...title.childNodes); title.replaceWith(p)
-    }
-    nested.replaceWith(...nested.childNodes)
-  }
-  for (const details of fragment.querySelectorAll('details')) {
-    let title = details.querySelector(':scope > summary')
-    if (!title) { title = document.createElement('summary'); title.textContent = '折叠内容' }
-    title.remove(); inlineOnly(title)
-    const body = document.createElement('div'); body.setAttribute('data-disclosure-body','')
-    body.append(...details.childNodes); details.replaceChildren(title, body)
-  }
-  for (const div of fragment.querySelectorAll('div')) {
-    if (div.parentElement?.tagName === 'DETAILS') div.setAttribute('data-disclosure-body','')
-    else div.replaceWith(...div.childNodes)
-  }
+  // Expand former disclosure blocks while retaining every title and paragraph.
   for (const summary of fragment.querySelectorAll('summary')) {
-    if (summary.parentElement?.tagName !== 'DETAILS') { const p = document.createElement('p'); p.append(...summary.childNodes); summary.replaceWith(p) }
+    const p = document.createElement('p'); p.append(...summary.childNodes); summary.replaceWith(p)
   }
+  for (const wrapper of fragment.querySelectorAll('details,div')) wrapper.replaceWith(...wrapper.childNodes)
   for (const figure of fragment.querySelectorAll('figure')) {
     if (figure.querySelectorAll('img').length !== 1) { figure.replaceWith(...figure.childNodes); continue }
     figure.setAttribute('data-size', figure.getAttribute('data-size') === 'narrow' ? 'narrow' : 'full')

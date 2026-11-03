@@ -1,7 +1,7 @@
 /* Shared by the editor, its preview and the published article. */
 .article-body,.editor-paper,.writing-area{min-width:0}
 .prose{word-break:normal;overflow-wrap:anywhere}
-.prose p,.prose h2,.prose h3,.prose figcaption,.prose summary{white-space:pre-wrap}
+.prose p,.prose h2,.prose h3,.prose figcaption{white-space:pre-wrap}
 .prose h2,.prose h3{line-height:1.6;margin:1.8em 0 .8em;scroll-margin-top:110px}
 .prose ul,.prose ol{padding-left:1.6em;margin:.8em 0 1.2em}
 .prose li>p{margin-bottom:.3em}
@@ -11,12 +11,9 @@
 .prose figure img{margin:0 auto;max-width:100%;height:auto}
 .prose figcaption{font:13px/1.9 var(--serif);color:#72806b;text-align:center;margin-top:10px;min-height:1.9em}
 .article-content figcaption:empty{display:none}
-.prose details{margin:1.2em 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:10px 0}
-.prose summary{cursor:pointer;font-weight:600;line-height:1.9;min-height:38px;padding:5px 2px}
-.prose details>div[data-disclosure-body]{padding:12px 0 6px 18px}
 .prose pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f4f6f0;padding:16px;font-size:.85em}
 .prose code{font-size:.9em}
-.prose img:focus-visible,.prose summary:focus-visible{outline:2px solid var(--green);outline-offset:4px}
+.prose img:focus-visible{outline:2px solid var(--green);outline-offset:4px}
 .article-content img{cursor:zoom-in}
 .article-toc-mobile{border-bottom:1px solid var(--line);margin:0 0 28px;font-size:13px;color:var(--green)}
 .article-toc-mobile summary{padding:12px 0;cursor:pointer;min-height:44px}
@@ -67,7 +64,7 @@
 .article-layout.layout-heading-left :is(h2,h3){text-align:left}
 .article-layout.layout-heading-center :is(h2,h3){text-align:center}
 .article-layout :is(ul,ol,blockquote){text-align:left}
-.article-layout.layout-indent>p,.article-layout.layout-indent .tiptap>p,.article-layout.layout-indent [data-disclosure-body]>p{text-indent:2em}
+.article-layout.layout-indent>p,.article-layout.layout-indent .tiptap>p{text-indent:2em}
 .article-layout li>p{margin-bottom:.3em;text-indent:0}
 .article-layout.layout-gap-compact p.article-empty-line{line-height:.7em;min-height:.7em;margin:0;text-indent:0}
 .layout-entry{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 24px;font-size:12px}
@@ -90,4 +87,10 @@
 .layout-dialog-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;bottom:0;background:#fafbf8;border-top:1px solid var(--line);padding:16px 28px}.layout-dialog-footer>div{display:flex;gap:10px}
 .layout-dialog-footer .button{font-size:12px;padding:10px 18px;min-height:42px}.layout-reset{font-size:12px;color:#71816b;padding:10px 0;min-height:42px}
 @media(max-width:600px){.layout-dialog-heading{padding:20px 18px 16px}.layout-dialog-content{padding:0 18px 18px}.layout-dialog-footer{padding:12px 18px}.layout-dialog-footer .button{padding:10px 14px}.layout-option-grid{gap:12px}.layout-sample.prose{padding:16px;font-size:13px}}
-@media(max-width:600px){.article-layout.layout-lines-relaxed{--article-line-height:2.2}.editor-toolbar button{min-height:42px;min-width:38px}.prose figure[data-size=narrow]{width:80%}.prose details>div[data-disclosure-body]{padding-left:12px}}
+@media(max-width:600px){.article-layout.layout-lines-relaxed{--article-line-height:2.2}.editor-toolbar button{min-height:42px;min-width:38px}.prose figure[data-size=narrow]{width:80%}}
+.article-versions-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;padding:0;text-align:left;font:600 16px var(--serif)}
+.article-versions-toggle span,.article-version-action{font:12px var(--sans);color:var(--green);text-decoration:underline;text-underline-offset:3px;padding:8px 0}
+.article-versions-list{list-style:none;padding:0;margin:12px 0 0}
+.article-versions-list li{display:flex;align-items:start;justify-content:space-between;gap:12px;border-top:1px solid var(--line);padding:10px 0;font-size:12px}
+.article-versions-list li>div{display:grid;gap:5px;min-width:0;overflow-wrap:anywhere}
+.article-versions-list time{color:#72806b}.article-version-action:disabled{opacity:.5}

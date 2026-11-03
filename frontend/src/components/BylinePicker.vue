@@ -1,0 +1,40 @@
+<script setup lang="ts">
+import {nextTick,onBeforeUnmount,ref,watch} from 'vue'
+import {api,message,notify,type PenName,type BylineMode} from '../api'
+import Icon from './Icon.vue'
+const props=defineProps<{mode:BylineMode;penNameId:number;byline:string;penNames:PenName[];disabled?:boolean;canBind:boolean}>()
+const emit=defineEmits<{'update:mode':[BylineMode];'update:penNameId':[number];'update:byline':[string];bound:[PenName]}>()
+const temporaryNames=ref<string[]>([]),busy=ref(false),composing=ref(false)
+watch(()=>[props.mode,props.byline],()=>{if(props.mode==='TEMPORARY'&&props.byline&&!temporaryNames.value.includes(props.byline))temporaryNames.value.push(props.byline)},{immediate:true})
+const dialog=ref<HTMLDialogElement|null>(null),stage=ref<'edit'|'bind'|null>(null),draft=ref(''),error=ref('')
+let previousFocus:HTMLElement|null=null,disposed=false
+async function open(value:'edit'|'bind'){previousFocus=document.activeElement as HTMLElement;stage.value=value;error.value='';await nextTick();dialog.value?.showModal()}
+function close(){if(busy.value)return;dialog.value?.close();stage.value=null;previousFocus?.focus()}
+function edit(){draft.value=props.mode==='TEMPORARY'?props.byline:'';void open('edit')}
+function useTemporary(name:string){if(!temporaryNames.value.includes(name))temporaryNames.value.push(name);emit('update:mode','TEMPORARY');emit('update:penNameId',0);emit('update:byline',name)}
+function useBound(pen:PenName){emit('bound',pen);emit('update:mode','BOUND');emit('update:penNameId',pen.id);emit('update:byline',pen.name)}
+function useAnonymous(){emit('update:mode','ANONYMOUS');emit('update:penNameId',0);emit('update:byline','佚名')}
+async function commit(){
+  if(busy.value||composing.value)return;const name=draft.value.trim();if(!name||name.length>120||['佚名','署名待核'].includes(name)){error.value='请填写 1～120 字的临时署名；佚名请直接选择。';return}draft.value=name;error.value=''
+  if(!props.canBind){useTemporary(name);close();return}
+  busy.value=true
+  try{const {data}=await api.get('/member/pen-names/availability',{params:{name}});if(disposed)return
+    busy.value=false
+    if(data.status==='OTHER'){useTemporary(name);notify('该笔名已被他人绑定，已作为临时署名添加');close()}
+    else if(data.status==='SELF'){useBound({...data.pen,workCount:data.pen.workCount||0});close()}
+    else if(data.status==='AVAILABLE')stage.value='bind'
+    else error.value='无法确认笔名状态，请重试'
+  }catch(e){error.value=message(e)}finally{busy.value=false}
+}
+async function bind(){if(busy.value)return;busy.value=true;error.value='';try{const {data}=await api.post('/member/pen-names',{name:draft.value});if(disposed)return;busy.value=false;useBound({...data,name:data.name||draft.value,workCount:data.workCount||0});notify('笔名已绑定并加入署名选项');close()}catch(e){if((e as {response?:{status?:number}})?.response?.status===409){busy.value=false;useTemporary(draft.value);notify('该笔名刚刚被他人绑定，已作为临时署名添加');close()}else error.value=message(e)}finally{busy.value=false}}
+function decline(){useTemporary(draft.value);close()}
+onBeforeUnmount(()=>{disposed=true;dialog.value?.close()})
+</script>
+<template>
+  <div class="byline-picker-label"><span>作者署名</span><div class="byline-picker-control" role="group" aria-label="作者署名"><button v-for="pen in penNames" :key="pen.id" type="button" class="byline-choice" :disabled="disabled" :aria-pressed="mode==='BOUND'&&penNameId===pen.id" @click="useBound(pen)">{{pen.name}}</button><button type="button" class="byline-choice" :disabled="disabled" :aria-pressed="mode==='ANONYMOUS'" @click="useAnonymous">佚名</button><button v-for="name in temporaryNames" :key="name" type="button" class="byline-choice" :disabled="disabled" :aria-pressed="mode==='TEMPORARY'&&byline===name" @click="useTemporary(name)">{{name}}<span class="temporary-badge">临时</span></button><button type="button" class="byline-add" :disabled="disabled" aria-label="添加临时署名" title="临时署名" @click="edit"><Icon name="Plus" :size="18"/></button></div></div>
+  <p class="field-help" v-if="mode==='ANONYMOUS'">署名为佚名，不绑定笔名；发布账号照常显示。</p><p class="field-help" v-else-if="mode==='TEMPORARY'">{{byline}} <span class="temporary-badge">临时</span> <button type="button" class="byline-edit" :disabled="disabled" @click="edit">修改</button>。本次署名未绑定账号笔名。</p>
+  <Teleport to="body"><dialog v-if="stage" ref="dialog" class="byline-dialog" :aria-label="stage==='edit'?'编辑临时署名':'是否绑定临时署名'" @cancel.prevent="close()"><header><h2>{{stage==='edit'?'填写署名':'将这个署名绑定到账号？'}}</h2><button type="button" :disabled="busy" aria-label="关闭署名弹窗" @click="close()"><Icon name="X" :size="18"/></button></header><form v-if="stage==='edit'" @submit.prevent="commit"><p>填写完成后，可选择绑定笔名或仅作临时署名。</p><label>临时署名<input v-model="draft" :disabled="busy" @compositionstart="composing=true" @compositionend="composing=false" autofocus maxlength="120" required placeholder="填写本篇的作者署名"/></label><p v-if="error" class="error-message" role="alert">{{error}}</p><footer><button type="button" class="button secondary" :disabled="busy" @click="close()">取消</button><button class="button" :disabled="busy">{{busy?'查询中…':'使用此署名'}}</button></footer></form><template v-else><p class="byline-confirm-name">{{draft}}</p><p>选择“是”立即绑定并加入署名选项；选择“否”将加入署名选项并备注“临时”。</p><p v-if="error" class="error-message" role="alert">{{error}}</p><footer><button type="button" class="byline-cancel" :disabled="busy" @click="stage='edit';error=''">返回修改</button><button type="button" class="button secondary" :disabled="busy" @click="decline">否，仅作临时署名</button><button type="button" class="button" :disabled="busy" @click="bind">{{busy?'绑定中…':'是，绑定笔名'}}</button></footer></template></dialog></Teleport>
+</template>
+<style scoped>
+.temporary-badge{display:inline-block;font-size:11px;color:#9b885f;background:#f5f0e4;border:1px solid #e6ddc9;border-radius:3px;padding:0 5px}.byline-picker-label{display:grid;gap:9px;font-size:13px;color:#748766}.byline-picker-control{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0}.byline-choice,.byline-add{min-height:38px;border:1px solid #dce6d2;background:#fff;color:#668153;border-radius:5px;cursor:pointer}.byline-choice{display:inline-flex;align-items:center;gap:7px;max-width:100%;padding:8px 13px;font:inherit;text-align:left;overflow-wrap:anywhere}.byline-choice[aria-pressed="true"]{border-color:#789565;background:#edf4e6;color:#405e33;box-shadow:inset 0 0 0 1px #789565}.byline-add{display:grid;place-items:center;flex-shrink:0;width:38px;background:#f0f5ea;font-size:17px}.byline-choice:focus-visible,.byline-add:focus-visible{outline:2px solid #83a172;outline-offset:3px}.byline-choice:disabled,.byline-add:disabled{opacity:.5;cursor:default}.byline-edit{font-size:inherit;color:#58734b;text-decoration:underline}.byline-dialog{width:min(500px,calc(100vw - 32px));max-height:85svh;overflow:auto;overscroll-behavior:contain;border:1px solid #dce4d5;border-radius:10px;padding:27px;background:#fff;color:#4a6241;box-shadow:0 20px 80px #1c38262a}.byline-dialog::backdrop{background:#1d34284f;backdrop-filter:blur(3px)}.byline-dialog>header{display:flex;align-items:center;justify-content:space-between;gap:20px;border-bottom:1px solid #e8eddf;padding-bottom:18px}.byline-dialog h2{font:24px/1.5 var(--serif);margin:0}.byline-dialog p{font-size:13px;color:#829374;line-height:2}.byline-dialog label{font-size:13px}.byline-dialog input{width:100%}.byline-dialog footer{display:flex;justify-content:flex-end;gap:10px;align-items:center;border-top:1px solid #e8eddf;padding-top:20px;margin-top:23px;flex-wrap:wrap}.byline-dialog .button{font-size:13px;letter-spacing:0;padding:10px 15px}.byline-dialog .byline-confirm-name{font:27px/1.7 var(--serif);color:#4d6b40;overflow-wrap:anywhere}.byline-cancel{font-size:12px;color:#8a997d;margin-right:auto}.byline-dialog button{cursor:pointer}.byline-dialog button:focus-visible{outline:2px solid #83a172;outline-offset:3px}@media(max-width:540px){.byline-dialog{padding:22px}.byline-dialog h2{font-size:21px}.byline-cancel{width:100%;text-align:left;margin-bottom:6px}}
+</style>

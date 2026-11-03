@@ -17,6 +17,7 @@
     <mybatis.version>4.1.0</mybatis.version>
   </properties>
   <dependencies>
+    <dependency><groupId>com.github.houbb</groupId><artifactId>sensitive-word</artifactId><version>0.29.5</version></dependency>
     <dependency><groupId>org.jsoup</groupId><artifactId>jsoup</artifactId><version>1.23.2</version></dependency>
     <dependency><groupId>org.apache.poi</groupId><artifactId>poi-ooxml</artifactId><version>6.0.0</version></dependency>
     <dependency><groupId>org.apache.pdfbox</groupId><artifactId>pdfbox</artifactId><version>3.0.8</version></dependency>

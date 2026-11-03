@@ -43,16 +43,35 @@ public class UploadController {
         BufferedImage output=new BufferedImage(Math.max(1,(int)(source.getWidth()*scale)),Math.max(1,(int)(source.getHeight()*scale)),BufferedImage.TYPE_INT_RGB);
         var graphics=output.createGraphics();graphics.setColor(Color.WHITE);graphics.fillRect(0,0,output.getWidth(),output.getHeight());graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION,RenderingHints.VALUE_INTERPOLATION_BICUBIC);graphics.drawImage(source,0,0,output.getWidth(),output.getHeight(),null);graphics.dispose();
         String id=UUID.randomUUID().toString(),name=id+".jpg";Files.createDirectories(root);Path target=root.resolve(name);
-        ImageIO.write(output,"jpg",target.toFile());
+        var writers=ImageIO.getImageWritersByFormatName("jpeg");var writer=writers.next();
+        try(var stream=ImageIO.createImageOutputStream(target.toFile())){
+            writer.setOutput(stream);var options=writer.getDefaultWriteParam();options.setCompressionMode(javax.imageio.ImageWriteParam.MODE_EXPLICIT);options.setCompressionQuality(.8f);
+            writer.write(null,new javax.imageio.IIOImage(output,null,null),options);
+        }finally{writer.dispose();}
         try{s.store().update("INSERT INTO media_files(id,owner_id,original_name,file_path,mime_type,size_bytes) VALUES(?,?,?,?,?,?)",id,s.memberId(p.getName()),bounded(file.getOriginalFilename(),200,"文件名"),name,"image/jpeg",Files.size(target));}
         catch(RuntimeException ex){Files.deleteIfExists(target);throw ex;}
-        return Map.of("url","/api/media/"+id,"width",String.valueOf(output.getWidth()),"height",String.valueOf(output.getHeight()));
+        return Map.of("url","/api/media/"+id,"width",String.valueOf(output.getWidth()),"height",String.valueOf(output.getHeight()),"sizeBytes",String.valueOf(Files.size(target)));
         } finally { images.release(); }
+    }
+    @GetMapping("/api/member/images/sizes")public Map<String,Long> imageSizes(@RequestParam String ids,Principal principal){
+        var result=new LinkedHashMap<String,Long>();String[] values=ids.split(",");
+        if(values.length>1000)throw error(400,"单篇图片数量过多");
+        long owner=s.memberId(principal.getName());
+        for(String id:new LinkedHashSet<>(Arrays.asList(values))){
+            if(!("/api/media/"+id).matches(WorkHtml.MEDIA_PATH))throw error(400,"无效图片地址");
+            var row=s.store().one("SELECT size_bytes FROM media_files WHERE id=? AND owner_id=?",id,owner);
+            if(row==null)throw error(404,"图片不存在或不属于当前账号");
+            result.put("/api/media/"+id,((Number)row.get("sizeBytes")).longValue());
+        }
+        return result;
     }
     @GetMapping("/api/media/{id}")public ResponseEntity<FileSystemResource> media(@PathVariable String id,Principal p){
         var row=s.store().one("SELECT * FROM media_files WHERE id=?",id);if(row==null)throw error(404,"图片不存在");
         boolean own=p!=null&&Objects.equals(row.get("ownerId"),s.member(p.getName()).get("id"));
-        if(!own&&s.store().count("SELECT COUNT(*) FROM work_media wm JOIN works w ON w.id=wm.work_id WHERE wm.media_id=? AND w.status='PUBLISHED'",id)==0)throw error(404,"图片尚未公开");
+        var auth=org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        boolean reviewer=p!=null&&auth!=null&&auth.getAuthorities().stream().anyMatch(a->Set.of("ROLE_ADMIN","ROLE_PUBLIC_STAFF").contains(a.getAuthority()));
+        if(!own&&s.store().count("SELECT COUNT(*) FROM work_media wm JOIN works w ON w.id=wm.work_id WHERE wm.media_id=?"+(reviewer?" AND w.status<>'DRAFT'":" AND w.status='PUBLISHED'"),id)==0
+            &&(!reviewer||s.store().count("SELECT COUNT(*) FROM work_draft_media dm JOIN works w ON w.id=dm.work_id JOIN article_reviews r ON r.work_id=w.id AND r.draft_revision=w.edit_revision WHERE dm.media_id=? AND r.status='PENDING'",id)==0))throw error(404,"图片尚未公开");
         Path target=root.resolve((String)row.get("filePath")).normalize();if(!target.startsWith(root))throw error(404,"图片不存在");
         return ResponseEntity.ok().contentType(MediaType.IMAGE_JPEG).cacheControl(CacheControl.noStore()).body(new FileSystemResource(target));
     }

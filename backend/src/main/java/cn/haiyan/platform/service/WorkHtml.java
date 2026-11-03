@@ -20,27 +20,9 @@ public final class WorkHtml {
     public static Document clean(String raw) {
         var doc = new Cleaner(ALLOWED).clean(Jsoup.parseBodyFragment(raw));
         doc.outputSettings().prettyPrint(false);
-        // Flatten nested disclosures, retaining both their title and their body as text blocks.
-        for (var nested : doc.select("details details")) {
-            for (var summary : nested.children()) if (summary.tagName().equals("summary")) summary.tagName("p");
-            nested.unwrap();
-        }
-        for (var details : doc.select("details")) {
-            Element title = details.children().stream().filter(e -> e.tagName().equals("summary")).findFirst().orElse(null);
-            if (title == null) title = new Element("summary").text("折叠内容");
-            else title.remove();
-            inlineOnly(title);
-            var body = new Element("div").attr("data-disclosure-body", "");
-            for (var node : details.childNodesCopy()) body.appendChild(node);
-            details.empty().appendChild(title).appendChild(body);
-        }
-        for (var div : doc.select("div")) {
-            if (div.parent() != null && div.parent().tagName().equals("details")) div.attr("data-disclosure-body", "");
-            else div.unwrap();
-        }
-        for (var summary : doc.select("summary")) {
-            if (summary.parent() == null || !summary.parent().tagName().equals("details")) summary.tagName("p");
-        }
+        // Former disclosure titles and bodies are ordinary, always visible blocks.
+        for (var summary : doc.select("summary")) summary.tagName("p");
+        for (var wrapper : doc.select("details,div")) wrapper.unwrap();
         for (var figure : doc.select("figure")) {
             if (figure.select("img").size() != 1) { figure.unwrap(); continue; }
             figure.attr("data-size", "narrow".equals(figure.attr("data-size")) ? "narrow" : "full");

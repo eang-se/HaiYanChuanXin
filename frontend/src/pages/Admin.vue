@@ -1,34 +1,38 @@
 <script setup lang="ts">
-import {ref,reactive,onMounted,computed} from 'vue'
-import {api,message,notify,date,user,siteName} from '../api'
-const roles:Record<string,string>={SUPER_ADMIN:'超级管理员',ADMIN:'管理员',MEMBER:'社员',RESTRICTED:'受限社员'}
-const isAdmin=computed(()=>['ADMIN','SUPER_ADMIN'].includes(user.value?.actorRole||user.value?.role||''))
-const isEditor=computed(()=>user.value?.accountType==='PUBLIC'&&user.value.username==='haiyan_editor')
-const isActivity=computed(()=>user.value?.accountType==='PUBLIC'&&user.value.username==='haiyan_activity')
-const isTech=computed(()=>user.value?.accountType==='PUBLIC'&&user.value.username==='haiyan_tech')
-const tabs=computed(()=>[...(isAdmin.value?['社员名册']:[]),...(isAdmin.value||isEditor.value?['稿件管理']:[]),...(isEditor.value?['批量上传']:[]),...(isAdmin.value||isActivity.value?['活动标签']:[]),...(isTech.value?['网站维护']:[])])
-const data=ref<any>({members:[],works:[]}),tab=ref(isAdmin.value?'社员名册':isEditor.value?'稿件管理':isTech.value?'网站维护':'活动标签'),error=ref(''),tag=reactive({name:'',description:'',isActivity:true}),busy=ref(false)
-const site=reactive({siteName:'',siteDescription:'',registrationEnabled:true,registrationMode:'live'})
-const batchFiles=ref<File[]>([]),batchResults=ref<{name:string;message:string;ok:boolean}[]>([]),batchBusy=ref(false)
-async function load(){error.value='';try{data.value=(await api.get('/admin/overview')).data;if(isTech.value)Object.assign(site,(await api.get('/admin/settings')).data)}catch(e){error.value=message(e)}}
-async function saveSite(){busy.value=true;error.value='';try{await api.put('/admin/settings',site);siteName.value=site.siteName;notify('网站资料已更新')}catch(e){error.value=message(e)}finally{busy.value=false}}
-async function withdraw(id:number){if(!confirm('确认下架这篇作品？'))return;try{await api.post(`/admin/works/${id}/withdraw`);await load();notify('作品已下架')}catch(e){notify(message(e))}}
-async function createTag(){busy.value=true;try{await api.post('/admin/tags',tag);tag.name='';tag.description='';notify('标签已创建')}catch(e){notify(message(e))}finally{busy.value=false}}
-function selectFiles(event:Event){batchFiles.value=Array.from((event.target as HTMLInputElement).files||[]);batchResults.value=[]}
-function escapeText(text:string){return text.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]||c))}
-async function importBatch(){
- if(!batchFiles.value.length||batchBusy.value)return
- if(batchFiles.value.length>20){notify('一次最多上传 20 个文件');return}
- batchBusy.value=true;batchResults.value=[]
- try{for(const file of batchFiles.value){try{
-  const data=new FormData();data.append('file',file)
-  const imported=(await api.post('/member/import',data)).data
-  const body=String(imported.text||'').split(/\n\s*\n/).map(p=>`<p>${escapeText(p).replace(/\n/g,'<br>')}</p>`).join('')
-  const title=file.name.replace(/\.(docx|pdf|txt)$/i,'').slice(0,100)||'未命名稿件'
-  await api.post('/member/works',{title,genre:'其他',excerpt:'',body,cover:'',tagIds:[],publish:false})
-  batchResults.value.push({name:file.name,message:'已保存为草稿',ok:true})
- }catch(e){batchResults.value.push({name:file.name,message:message(e),ok:false})}}}finally{batchBusy.value=false;batchFiles.value=[]}
+import {ref,onMounted} from 'vue'
+import {api,message,user,type Work} from '../api'
+import Icon from '../components/Icon.vue'
+import PermissionSummary from '../components/PermissionSummary.vue'
+import {useAdminAccess,workStatusLabels,adminDate} from '../composables/admin'
+const {isAdmin,canReview,canTag,canImport,canConfigure}=useAdminAccess()
+const loading=ref(true),error=ref(''),accountCount=ref(0),restrictedCount=ref(0),tagCount=ref(0)
+const summary=ref({total:0,published:0,draft:0,withdrawn:0,featured:0}),recent=ref<Work[]>([])
+async function load(){
+  loading.value=true;error.value=''
+  try{await Promise.all([
+    ...(isAdmin.value?[api.get('/admin/accounts').then(({data})=>{const personal=data.filter((m:{accountType:string})=>m.accountType!=='PUBLIC');accountCount.value=personal.length;restrictedCount.value=personal.filter((m:{role:string})=>m.role==='RESTRICTED').length})]:[]),
+    ...(canReview.value?[api.get('/admin/works',{params:{pageSize:5}}).then(({data})=>{summary.value=data.summary;recent.value=data.items})]:[]),
+    ...(canTag.value?[api.get('/public/tags').then(({data})=>tagCount.value=data.length)]:[]),
+  ])}catch(e){error.value=message(e)}finally{loading.value=false}
 }
 onMounted(load)
 </script>
-<template><div class="container page-space"><div class="section-heading"><div><p class="eyebrow">管理</p><h1 class="page-title">社务台</h1></div><RouterLink v-if="isAdmin" to="/admin/settings" class="button secondary">后台配置</RouterLink></div><div v-if="isAdmin" class="desk-stats"><div><strong>{{data.members.filter((m:any)=>m.accountType!=='PUBLIC').length}}</strong><span>社员</span></div><div><strong>{{data.works.filter((w:any)=>w.status==='PUBLISHED').length}}</strong><span>近期公开作品</span></div></div><div class="genre-tabs desk-tabs"><button v-for="t in tabs" :key="t" :class="{selected:tab===t}" @click="tab=t">{{t}}</button></div><p v-if="error" class="error-message">{{error}}</p><div v-if="tab==='社员名册'" class="table-wrap"><table><thead><tr><th>笔名</th><th>账号</th><th>身份</th><th>加入时间</th><th></th></tr></thead><tbody><tr v-for="m in data.members" :key="m.id"><td>{{m.penName}}</td><td>{{m.username}}</td><td>{{m.accountType==='PUBLIC'?'公用账号':(roles[m.role]||m.role)}}</td><td>{{date(m.createdAt)}}</td><td><RouterLink to="/admin/settings">配置权限</RouterLink></td></tr></tbody></table></div><div v-else-if="tab==='稿件管理'" class="table-wrap"><p class="quiet-note">展示最近 100 篇稿件；作品经自动审核后公开。</p><table><thead><tr><th>作品</th><th>署名 / 发布账号</th><th>状态</th><th></th></tr></thead><tbody><tr v-for="w in data.works" :key="w.id"><td><RouterLink v-if="w.status==='PUBLISHED'" :to="`/work/${w.id}`">{{w.title}}</RouterLink><span v-else>{{w.title||'未命名稿件'}}</span></td><td>{{w.displayByline}}<br/><small class="quiet-note">{{w.authorName}}</small></td><td>{{w.status==='PUBLISHED'?'公开':w.status==='DRAFT'?'草稿':'已撤回'}}</td><td><button v-if="w.status==='PUBLISHED'" @click="withdraw(w.id)">下架</button></td></tr></tbody></table></div><form v-else-if="tab==='批量上传'" class="panel profile-form" @submit.prevent="importBatch"><h2>批量上传稿件</h2><p class="quiet-note">支持 TXT、DOCX 和文字型 PDF，一次最多 20 个文件。文件解析后保存为编辑部草稿，可在“我的书桌”中修改和发布。</p><label>选择文件<input type="file" multiple accept=".txt,.docx,.pdf" :disabled="batchBusy" @change="selectFiles"/></label><button class="button" :disabled="batchBusy||!batchFiles.length">{{batchBusy?'正在处理…':`上传并保存草稿（${batchFiles.length}）`}}</button><p v-for="result in batchResults" :key="result.name" :class="result.ok?'quiet-note':'error-message'">{{result.name}}：{{result.message}}</p></form><form v-else-if="tab==='网站维护'" class="panel profile-form" @submit.prevent="saveSite"><h2>网站资料</h2><label>站点名称<input v-model="site.siteName" maxlength="80" required/></label><label>站点介绍<textarea v-model="site.siteDescription" maxlength="300" rows="3"></textarea></label><p class="quiet-note">注册与账号权限由管理员配置。</p><button class="button" :disabled="busy">保存</button></form><form v-else class="panel profile-form" @submit.prevent="createTag"><h2>新增标签或征稿主题</h2><label>名称<input v-model="tag.name" maxlength="30" required/></label><label>说明<textarea v-model="tag.description" maxlength="300" rows="3"></textarea></label><label class="checkbox-label"><input type="checkbox" v-model="tag.isActivity"/>同时展示在“征稿与活动”</label><button class="button" :disabled="busy">创建标签</button></form></div></template>
+<template>
+  <header class="admin-page-heading"><div><p class="admin-kicker">WORKSPACE OVERVIEW</p><h1>工作概览</h1><p>{{user?.penName}}，欢迎回来。社务工作，从这里有序展开。</p></div><button class="button secondary small" :disabled="loading" @click="load"><Icon name="RefreshCw" :size="15"/>{{loading?'加载中…':'刷新数据'}}</button></header>
+  <div v-if="error" class="error-message" role="alert">{{error}} <button @click="load">重新加载</button></div>
+  <div class="admin-metrics" :aria-busy="loading">
+    <RouterLink v-if="isAdmin" to="/admin/accounts" class="admin-metric"><span>个人账户 <Icon name="Users"/></span><strong>{{loading||error?'—':accountCount}}</strong><small>{{loading?'正在获取账户数据':`${restrictedCount} 个受限账户`}} <Icon name="ArrowRight" :size="14"/></small></RouterLink>
+    <RouterLink v-if="canReview" to="/admin/works?status=PUBLISHED" class="admin-metric"><span>已公开文章 <Icon name="BookOpen"/></span><strong>{{loading||error?'—':summary.published}}</strong><small>查看公开内容 <Icon name="ArrowRight" :size="14"/></small></RouterLink>
+    <RouterLink v-if="canReview" to="/admin/works?featured=true" class="admin-metric"><span>海燕精选 <Icon name="Sparkles"/></span><strong>{{loading||error?'—':summary.featured}}</strong><small>管理首页推荐 <Icon name="ArrowRight" :size="14"/></small></RouterLink>
+    <RouterLink v-if="canTag" to="/admin/tags" class="admin-metric"><span>活动与标签 <Icon name="Hash"/></span><strong>{{loading||error?'—':tagCount}}</strong><small>整理创作主题 <Icon name="ArrowRight" :size="14"/></small></RouterLink>
+  </div>
+  <section class="admin-section"><div class="admin-section-title"><div><h2>管理入口</h2><p>按工作内容分区，各有归属。</p></div></div><div class="admin-entry-grid">
+    <RouterLink v-if="isAdmin" to="/admin/accounts" class="admin-entry"><span class="admin-entry-icon"><Icon name="Users" :size="23"/></span><div><h3>账户管理</h3><p>个人账户、角色权限、公用身份授权。</p><small>进入账户管理 <Icon name="ArrowRight" :size="14"/></small></div></RouterLink>
+    <RouterLink v-if="canReview" to="/admin/works" class="admin-entry"><span class="admin-entry-icon"><Icon name="FileText" :size="23"/></span><div><h3>文章管理 / 审核</h3><p>检索稿件、巡查正文、推荐精选与下架。</p><small>进入文章管理 <Icon name="ArrowRight" :size="14"/></small></div></RouterLink>
+    <RouterLink v-if="canTag" to="/admin/tags" class="admin-entry"><span class="admin-entry-icon"><Icon name="Hash" :size="23"/></span><div><h3>活动与标签</h3><p>查看现有主题，创建标签与征稿活动。</p><small>管理活动标签 <Icon name="ArrowRight" :size="14"/></small></div></RouterLink>
+    <RouterLink v-if="canImport" to="/admin/import" class="admin-entry"><span class="admin-entry-icon"><Icon name="Upload" :size="23"/></span><div><h3>批量导入</h3><p>批量解析文档，保存为编辑部草稿。</p><small>导入稿件 <Icon name="ArrowRight" :size="14"/></small></div></RouterLink>
+    <RouterLink v-if="canConfigure" to="/admin/settings" class="admin-entry"><span class="admin-entry-icon"><Icon name="Settings" :size="23"/></span><div><h3>站点设置</h3><p>{{isAdmin?'站点资料、注册开关与 QQ 注册名单。':'维护网站名称与站点介绍。'}}</p><small>查看站点设置 <Icon name="ArrowRight" :size="14"/></small></div></RouterLink>
+  </div></section>
+  <section v-if="canReview" class="admin-section"><div class="admin-section-title"><div><h2>最近更新的文章</h2><p>自动审核后公开，编辑部可继续进行内容巡查。</p></div><RouterLink to="/admin/works" class="admin-inline-link">全部文章 <Icon name="ArrowRight" :size="15"/></RouterLink></div><div class="admin-surface"><p v-if="loading" class="admin-empty">正在加载文章…</p><p v-else-if="!recent.length" class="admin-empty">暂无文章，新的来信正在路上。</p><RouterLink v-for="w in recent" :key="w.id" :to="`/admin/works?work=${w.id}`" class="admin-recent"><Icon name="FileText" :size="19"/><div><strong>{{w.title||'未命名稿件'}}</strong><small>{{w.displayByline||w.authorName}} · {{adminDate(w.updatedAt)}}</small></div><span class="admin-badge" :class="w.status.toLowerCase()">{{workStatusLabels[w.status]||w.status}}</span><Icon name="ChevronRight" :size="16"/></RouterLink></div></section>
+  <PermissionSummary/>
+</template>

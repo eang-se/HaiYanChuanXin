@@ -6,7 +6,7 @@ const passage='风从河岸慢慢吹过来，带着草木和泥土的气息。�
 const body=`<h2>沿着河岸</h2><p>${passage}</p><figure data-size="narrow"><img src="${src}" width="1200" height="800" alt="河畔暮色"><figcaption>暮色里的河岸 · 校园手记</figcaption></figure><h3>晚风</h3><p>风经过树梢<br>也经过我们的书页<br>一行字，留给明天</p><blockquote><p>把日常的声音，写进自己的句子里。</p></blockquote><ul><li><p>一片落叶</p></li><li><p>一本翻开的书</p></li></ul><hr><details><summary>写作后记</summary><div data-disclosure-body><p>这些文字来自一次放学后的散步。</p><h3>折叠章节</h3><p>展开后可以继续阅读。</p></div></details><h2>沿着河岸</h2>${Array.from({length:7},()=>`<p>${passage}</p>`).join('')}<h3>尾声</h3><p>https://example.test/${'long'.repeat(60)}</p>`
 const imageSvg='<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800"><rect width="1200" height="800" fill="#dbe5d1"/><circle cx="880" cy="210" r="70" fill="#f3e4b2"/><path d="M0 400Q260 220 520 430T1200 350V800H0" fill="#829b73"/><path d="M0 590Q340 380 720 580T1200 510V800H0" fill="#5a7554"/><path d="M480 450Q750 550 540 800H940Q600 580 580 450" fill="#c4d6ce"/></svg>'
 async function fixture(page:Page,html=body) {
-  const state={body:html,genre:'散文',customGenre:'',layout:undefined as unknown,saves:[] as any[],failSave:false,failUpload:false,uploadDelay:0,saveDelay:0,activeSaves:0,maxActiveSaves:0,uploads:0,uploaded:Buffer.alloc(0),deskIds:[42,43,44],deleted:[] as number[],deleteStatus:0,deleteDelay:0}
+  const state={body:html,bodyJson:null as any,status:'DRAFT',revision:0,versions:[] as {id:number;title:string;createdAt:string;body:string;bodyJson:any}[],conflict:false,genre:'散文',customGenre:'',layout:undefined as unknown,saves:[] as any[],failSave:false,failUpload:false,uploadDelay:0,saveDelay:0,activeSaves:0,maxActiveSaves:0,imageSize:1024,uploadedSize:2048,uploads:0,uploaded:Buffer.alloc(0),deskIds:[42,43,44],deleted:[] as number[],deleteStatus:0,deleteDelay:0}
   await page.route('**/api/**',async route=>{
     const path=new URL(route.request().url()).pathname,method=route.request().method()
     const json=(value:unknown,status=200)=>route.fulfill({status,json:value})
@@ -14,6 +14,7 @@ async function fixture(page:Page,html=body) {
     if(path==='/api/auth/csrf')return json({token:'fixture-only'})
     if(path==='/api/public/site')return json({name:'海燕传信'})
     if(path==='/api/public/tags')return json([{id:1,name:'校园',kind:'TOPIC',isActivity:false}])
+    if(path==='/api/public/activities')return json([])
     if(path==='/api/member/collections')return json([{id:7,title:'校园手记',published:false}])
     if(path==='/api/member/pen-names'||path==='/api/member/bookmarks')return json([])
     if(path==='/api/member/works'&&method==='GET')return json(state.deskIds.map(id=>({id,title:id===42?'草稿手记':id===43?'公开的文章':'已撤回的文章',genre:'散文',status:id===42?'DRAFT':id===43?'PUBLISHED':'WITHDRAWN',body:state.body,excerpt:'一篇校园手记',tags:[],collection:null,authorId:29,authorName:'测试作者',displayByline:'林间',wordCount:100,updatedAt:'2026-10-30T09:00:00'})))
@@ -23,19 +24,23 @@ async function fixture(page:Page,html=body) {
       if(state.deleteStatus)return json({message:state.deleteStatus===409?'请先撤回已发布作品，再删除稿件':'测试：删除失败，请重试'},state.deleteStatus)
       state.deskIds=state.deskIds.filter(value=>value!==id);return route.fulfill({status:204})
     }
-    if(path==='/api/public/works/42')return json({id:42,title:'晚风经过河岸',byline:'林间',displayByline:'林间',authorName:'测试作者',authorId:29,collection:null,collectionId:null,penNameId:null,genre:state.genre,customGenre:state.customGenre,layout:state.layout,body:state.body,excerpt:'校园手记',cover:'',status:'DRAFT',wordCount:980,tags:[],notes:'写于秋天的校园。',sourceNote:'',updatedAt:'2026-10-29T09:00:00'})
+    if(path==='/api/member/works/42/versions'&&method==='GET')return json(state.versions.map(({id,title,createdAt})=>({id,title,createdAt})))
+    if(path.startsWith('/api/member/works/42/versions/')&&method==='GET'){const version=state.versions.find(v=>v.id===Number(path.split('/').at(-1)));return version?json({body:version.body,bodyJson:version.bodyJson}):json({message:'未找到版本'},404)}
+    if(path==='/api/public/works/42'||path==='/api/member/works/42/draft')return json({id:42,title:'晚风经过河岸',byline:'林间',displayByline:'林间',authorName:'测试作者',authorId:29,collection:null,collectionId:null,penNameId:null,genre:state.genre,customGenre:state.customGenre,layout:state.layout,body:state.body,bodyJson:state.bodyJson,draftRevision:state.revision,excerpt:'校园手记',cover:'',status:state.status,wordCount:980,tags:[],notes:'写于秋天的校园。',sourceNote:'',updatedAt:'2026-10-29T09:00:00'})
     if(path.startsWith('/api/member/works')&&['POST','PUT'].includes(method)){
       state.activeSaves++;state.maxActiveSaves=Math.max(state.maxActiveSaves,state.activeSaves)
       const payload=route.request().postDataJSON();state.saves.push(payload)
       if(state.saveDelay)await new Promise(r=>setTimeout(r,state.saveDelay))
       state.activeSaves--
       if(state.failSave)return json({message:'测试：保存失败，请重试'},503)
-      state.body=payload.body;state.genre=payload.genre;state.customGenre=payload.customGenre;state.layout=payload.layout;return json({id:42,status:payload.publish?'PUBLISHED':'DRAFT'})
+      if(state.conflict || payload.draftRevision!==undefined&&payload.draftRevision!==state.revision)return json({message:'版本冲突'},409)
+      state.revision++;state.bodyJson=payload.bodyJson;state.status=payload.publish?'PUBLISHED':state.status;state.body=payload.body;state.genre=payload.genre;state.customGenre=payload.customGenre;state.layout=payload.layout;return json({id:42,status:state.status,draftRevision:state.revision})
     }
+    if(path==='/api/member/images/sizes')return json({[src]:state.imageSize})
     if(path==='/api/member/images'){
       state.uploaded=route.request().postDataBuffer() || Buffer.alloc(0)
       state.uploads++;if(state.uploadDelay)await new Promise(r=>setTimeout(r,state.uploadDelay))
-      return state.failUpload?json({message:'测试：图片上传失败'},503):json({url:src,width:'1200',height:'800'})
+      return state.failUpload?json({message:'测试：图片上传失败'},503):json({url:src,width:'1200',height:'800',sizeBytes:state.uploadedSize})
     }
     if(path==='/api/member/import')return json({text:'导入的第一行\n第二行\n\n最后一行'})
     if(path===src)return route.fulfill({contentType:'image/svg+xml',body:imageSvg})
@@ -46,7 +51,7 @@ async function fixture(page:Page,html=body) {
 async function noOverflow(page:Page) {expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true)}
 test.beforeAll(async()=>{await mkdir('../output/article-upgrade',{recursive:true})})
 
-test('reading is safe, has unique TOC links, opens folded headings and a keyboard/touch lightbox',async({page})=>{
+test('reading is safe, has unique TOC links, expands legacy disclosure content and a keyboard/touch lightbox',async({page})=>{
   await fixture(page,body+'<img src="https://invalid.test/tracker"><script>window.attacked=true</script><p onclick="window.attacked=true">安全正文</p>')
   await page.setViewportSize({width:1440,height:1000});await page.goto('/#/work/42')
   await expect(page.locator('.article-content h2')).toHaveCount(2)
@@ -55,7 +60,7 @@ test('reading is safe, has unique TOC links, opens folded headings and a keyboar
   await expect(page.locator('.article-content img')).toHaveAttribute('loading','lazy')
   await noOverflow(page);await page.screenshot({path:'../output/article-upgrade/reading-desktop.png',fullPage:true})
   await page.locator('.article-toc-side').getByRole('button',{name:'折叠章节',exact:true}).click()
-  await expect(page.locator('.article-content details')).toHaveAttribute('open','')
+  await expect(page.locator('.article-content details')).toHaveCount(0)
   expect(await page.locator('.article-content h3').filter({hasText:'折叠章节'}).evaluate(n=>n.getBoundingClientRect().top)).toBeGreaterThanOrEqual(90)
   await page.locator('.article-content img').click();await expect(page.getByRole('dialog',{name:'图片大图'})).toBeVisible()
   await page.keyboard.press('Escape');await expect(page.getByRole('dialog',{name:'图片大图'})).not.toBeVisible()
@@ -70,15 +75,15 @@ test('legacy text, new formats, notes and tags survive save failure/retry/reload
   const state=await fixture(page);await page.setViewportSize({width:1440,height:1000});await page.goto('/#/write/42')
   await expect(page.getByLabel('作品正文')).toBeVisible()
   const caption=page.locator('.tiptap figcaption');await caption.fill('新的图片说明');await page.getByLabel('附注',{exact:true}).fill('新附注')
-  await page.getByRole('button',{name:'# 校园',exact:true}).click()
+  await page.getByRole('textbox',{name:'填写内容标签'}).fill('校园');await page.getByRole('textbox',{name:'填写内容标签'}).press('Enter')
   await page.getByRole('combobox',{name:'所属合集',exact:true}).selectOption('7')
   await page.locator('.tiptap figure img').click();await page.getByRole('button',{name:'正文宽度',exact:true}).click()
-  await page.locator('.tiptap summary').fill('可编辑的标题')
+  await page.locator('.tiptap p').filter({hasText:'写作后记'}).fill('可编辑的标题')
   state.failSave=true;await page.getByRole('button',{name:'保存为草稿'}).click();await expect(page.getByRole('alert').first()).toContainText('保存失败')
   await expect(caption).toHaveText('新的图片说明');state.failSave=false
   await page.getByRole('button',{name:'保存为草稿'}).click();await expect(page.locator('.save-status')).toContainText('已保存')
-  expect(state.saves.at(-1).notes).toBe('新附注');expect(state.saves.at(-1).tagIds).toEqual([1]);expect(state.saves.at(-1).collectionId).toBe(7);expect(state.body).toContain('data-size="full"');expect(state.body).toContain('<br>')
-  await page.reload();await expect(page.locator('.tiptap figcaption')).toHaveText('新的图片说明');await expect(page.locator('.tiptap summary')).toHaveText('可编辑的标题')
+  expect(state.saves.at(-1).notes).toBe('新附注');expect(state.saves.at(-1).contentTags).toEqual(['校园']);expect(state.saves.at(-1).activityIds).toEqual([]);expect(state.saves.at(-1).collectionId).toBe(7);expect(state.body).toContain('data-size="full"');expect(state.body).toContain('<br>')
+  await page.reload();await expect(page.locator('.tiptap figcaption')).toHaveText('新的图片说明');await expect(page.locator('.tiptap p').filter({hasText:'可编辑的标题'})).toHaveCount(1)
   await page.screenshot({path:'../output/article-upgrade/editor-desktop.png',fullPage:true})
   await page.getByRole('button',{name:'阅读预览',exact:true}).click();await expect(page.locator('.preview-area .article-content figcaption')).toHaveText('新的图片说明')
   await page.getByRole('button',{name:'继续编辑',exact:true}).click();await page.setViewportSize({width:390,height:844});await noOverflow(page)
@@ -95,10 +100,10 @@ test('slash keyboard menu, Escape, IME suppression and tap insertion',async({pag
   await expect(page.getByRole('menu')).not.toBeVisible();await edit.dispatchEvent('keydown',{key:'Enter',keyCode:229,isComposing:true})
   await edit.dispatchEvent('compositionend',{data:'/'});await expect(page.getByRole('menu')).not.toBeVisible()
   await page.keyboard.press('Backspace');await page.keyboard.insertText('中文写作');await page.keyboard.press('Enter')
-  await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'插入',exact:true}).click();await page.getByRole('menuitem',{name:'折叠内容',exact:true}).click()
-  await expect(page.locator('.tiptap details')).toHaveCount(1);await page.locator('.tiptap summary').fill('手机上的后记')
-  await page.getByRole('button',{name:'插入',exact:true}).click();await expect(page.getByRole('menuitem',{name:'折叠内容',exact:true})).toBeDisabled();await page.keyboard.press('Escape')
-  await noOverflow(page)
+  await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'插入',exact:true}).click()
+  await expect(page.getByRole('menuitem',{name:'折叠内容',exact:true})).toHaveCount(0)
+  await page.getByRole('menuitem',{name:'分隔线',exact:true}).click();await expect(page.locator('.tiptap hr')).toHaveCount(1)
+
 })
 
 test('image failures retain text, retry once, and saves wait for the pending upload',async({page})=>{
@@ -148,8 +153,8 @@ test('touch controls work on a phone, and no-heading poetry has no TOC',async({b
   const context=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true})
   const page=await context.newPage();await fixture(page,'<p>第一行<br>第二行<br>第三行</p>')
   await page.goto('http://127.0.0.1:5173/#/work/42');await expect(page.locator('.article-toc-mobile')).toHaveCount(0);await expect(page.locator('.article-content br')).toHaveCount(2)
-  await page.goto('http://127.0.0.1:5173/#/write/42');await page.getByRole('button',{name:'插入',exact:true}).tap();await page.getByRole('menuitem',{name:'折叠内容',exact:true}).tap()
-  await expect(page.locator('.tiptap details')).toHaveCount(1);await noOverflow(page)
+  await page.goto('http://127.0.0.1:5173/#/write/42');await page.getByRole('button',{name:'插入',exact:true}).tap();await expect(page.getByRole('menuitem',{name:'折叠内容',exact:true})).toHaveCount(0);await page.getByRole('menuitem',{name:'分隔线',exact:true}).tap()
+  await expect(page.locator('.tiptap details')).toHaveCount(0);await noOverflow(page)
   await page.getByRole('button',{name:'设置版式',exact:true}).tap();await expect(page.getByRole('dialog',{name:'版式',exact:true})).toBeVisible()
   await page.getByRole('dialog',{name:'版式',exact:true}).getByRole('button',{name:'取消',exact:true}).tap();await expect(page.getByRole('dialog',{name:'版式',exact:true})).not.toBeVisible()
   await context.close()
@@ -201,4 +206,109 @@ test('draft deletion is available in both layouts, confirms, prevents repeats an
   state.deleteStatus=0;state.deleteDelay=600;page.once('dialog',dialog=>void dialog.accept());await draft.getByRole('button',{name:'删除草稿：草稿手记'}).click()
   await expect(draft.getByRole('button',{name:'删除草稿：草稿手记'})).toBeDisabled();await expect(draft).toHaveCount(0);expect(state.deleted).toEqual([42,42])
   await page.reload();await expect(page.locator('.desk-work-item').filter({hasText:'草稿手记'})).toHaveCount(0);await expect(page.locator('.desk-work-item').filter({hasText:'公开的文章'})).toBeVisible()
+})
+
+
+test('published work saves structured draft without publishing and restores history into the editor',async({page})=>{
+  const state=await fixture(page,'<p>已发布的正文</p>');state.status='PUBLISHED'
+  state.versions=[{id:9,title:'旧标题',createdAt:'2026-10-28T09:00:00',body:'<p>历史正文</p>',bodyJson:{type:'doc',content:[{type:'paragraph',content:[{type:'text',text:'历史正文'}]}]}}]
+  await page.goto('/#/write/42');await page.getByLabel('作品正文').click();await page.keyboard.press('Control+End');await page.keyboard.insertText('草稿中的新句子')
+  await expect(page.locator('.save-status')).toContainText('草稿已保存',{timeout:8000})
+  expect(state.saves.at(-1).publish).toBe(false);expect(state.saves.at(-1).body).toContain('草稿中的新句子')
+  expect(JSON.stringify(state.saves.at(-1).bodyJson)).toContain('草稿中的新句子');expect(state.status).toBe('PUBLISHED')
+  await page.getByRole('button',{name:'历史版本 查看'}).click();page.once('dialog',dialog=>void dialog.accept());await page.getByRole('button',{name:'载入正文'}).click()
+  await expect(page.getByLabel('作品正文')).toHaveText('历史正文')
+  await expect(page.locator('.save-status')).toContainText('草稿已保存',{timeout:8000})
+  expect(state.saves.at(-1).body).toContain('历史正文');expect(JSON.stringify(state.saves.at(-1).bodyJson)).toContain('历史正文')
+  expect(state.saves.at(-1).publish).toBe(false);expect(state.saves.at(-1).draftRevision).toBe(1)
+})
+
+test('draft revision conflict retains text and stops automatic retries',async({page})=>{
+  const state=await fixture(page,'<p>旧内容</p>');await page.goto('/#/write/42');state.conflict=true
+  await page.getByLabel('作品正文').click();await page.keyboard.press('Control+End');await page.keyboard.insertText('需要保留的新内容')
+  await expect(page.getByRole('alert')).toContainText('其他页面更新',{timeout:8000})
+  await expect(page.getByLabel('作品正文')).toContainText('需要保留的新内容')
+  await expect(page.getByRole('button',{name:'保存为草稿'})).toBeDisabled()
+  await page.waitForTimeout(2200);expect(state.saves).toHaveLength(1)
+})
+
+
+test('metadata-only save preserves untouched legacy HTML until the body is edited',async({page})=>{
+  const legacy=`<p>旧正文<br>下一行</p><img src="${src}" alt="旧图"><ol start="3"><li><p>第三项</p></li></ol>`
+  const state=await fixture(page,legacy);await page.goto('/#/write/42')
+  await page.getByLabel('作品标题').fill('只改标题');await page.getByRole('button',{name:'保存为草稿'}).click()
+  await expect(page.locator('.save-status')).toContainText('已保存')
+  expect(state.saves.at(-1).body).toBe(legacy);expect(state.saves.at(-1).bodyJson).toBeNull()
+  await page.getByLabel('作品正文').click();await page.keyboard.press('Control+End');await page.keyboard.insertText('新的句子')
+  await page.getByRole('button',{name:'保存为草稿'}).click();await expect(page.locator('.save-status')).toContainText('已保存')
+  expect(state.saves.at(-1).body).toContain('旧图');expect(state.saves.at(-1).body).toContain('第三项');expect(state.saves.at(-1).body).toContain('新的句子')
+  expect(JSON.stringify(state.saves.at(-1).bodyJson)).toContain('新的句子')
+})
+
+
+test('nested bold and italic, line breaks and lists persist in a synchronized document',async({page})=>{
+  const state=await fixture(page,'<p><strong>粗体<em>局部斜体</em>结尾</strong><br>下一行</p><ul><li><p>第一项</p></li><li><p>第二项</p></li></ul>')
+  await page.goto('/#/write/42');await page.getByLabel('作品正文').click();await page.keyboard.press('Control+End');await page.keyboard.insertText('新增文字')
+  await page.getByRole('button',{name:'保存为草稿'}).click();await expect(page.locator('.save-status')).toContainText('已保存')
+  const saved=state.saves.at(-1);expect(saved.body).toContain('<strong>粗体<em>局部斜体</em>结尾</strong>')
+  expect(saved.body).toContain('<br>');expect(saved.body).toContain('<ul>');expect(JSON.stringify(saved.bodyJson)).toContain('新增文字')
+  const paragraph=saved.bodyJson.content[0];expect(paragraph.content.find((node:any)=>node.text==='局部斜体').marks.map((mark:any)=>mark.type)).toEqual(['bold','italic'])
+})
+
+test('image budget stops uploads at 5 MB and deleting an image frees the space',async({page})=>{
+  const state=await fixture(page,`<p>要保留的正文</p><figure data-size="full"><img src="${src}" alt="旧图"><figcaption>说明</figcaption></figure>`);state.imageSize=5*1024*1024
+  await page.goto('/#/write/42');await expect(page.locator('.image-budget')).toContainText('5.00 / 5 MB')
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64')
+  await page.locator('input[type=file][accept="image/jpeg,image/png"]').setInputFiles({name:'small.png',mimeType:'image/png',buffer:png})
+  await expect(page.getByRole('alert')).toContainText('5 MB');expect(state.uploads).toBe(0);await expect(page.getByLabel('作品正文')).toContainText('要保留的正文')
+  await page.locator('.tiptap figure img').click();await page.keyboard.press('Backspace');await expect(page.locator('.image-budget')).toContainText('0.00 / 5 MB')
+  await page.getByRole('button',{name:'重试图片'}).click();await expect(page.locator('.tiptap img')).toHaveCount(1);expect(state.uploads).toBe(1)
+  expect(state.uploaded.toString()).toContain('image/jpeg');await expect(page.locator('.image-budget')).toContainText('0.00 / 5 MB')
+})
+
+test('an upload whose stored size exceeds the article budget never enters the document',async({page})=>{
+  const state=await fixture(page,'<p>要保留的正文</p>');state.uploadedSize=5*1024*1024+1
+  await page.goto('/#/write/42');await expect(page.getByLabel('作品正文')).toBeVisible()
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64')
+  await page.locator('input[type=file][accept="image/jpeg,image/png"]').setInputFiles({name:'small.png',mimeType:'image/png',buffer:png})
+  await expect(page.getByRole('alert')).toContainText('不能超过 5 MB');await expect(page.locator('.tiptap img')).toHaveCount(0);await expect(page.getByLabel('作品正文')).toHaveText('要保留的正文')
+  await page.getByRole('button',{name:'取消本次图片'}).click();await page.getByRole('button',{name:'保存为草稿'}).click();await expect.poll(()=>state.saves.length).toBeGreaterThan(0);expect(state.saves.at(-1).body).not.toContain('<img')
+})
+
+test('flagged publication offers a review request and retains the draft',async({page})=>{
+  await fixture(page,'<p>正常段落</p><p>一篇需要人工判断的新闻报道。</p>')
+  let submitted=false
+  await page.route('**/api/member/works/42/**',async route=>{
+    const path=new URL(route.request().url()).pathname
+    if(path.endsWith('/article-review'))return route.fulfill({json:{}})
+    if(path.endsWith('/article-reviews')&&route.request().method()==='POST'){submitted=true;return route.fulfill({json:{id:42,draftRevision:1,status:'PENDING'}})}
+    return route.fallback()
+  })
+  await page.route('**/api/member/works/42',async route=>{
+    if(route.request().method()==='PUT'&&route.request().postDataJSON().publish)return route.fulfill({status:422,json:{message:'内容检查提示：开源词库检测到疑似敏感内容。',locations:[{field:'title',block:null,tag:null},{field:'body',block:2,tag:'p'}],structure:['p','p']}})
+    return route.fallback()
+  })
+  await page.goto('/#/write/42')
+  await page.getByRole('button',{name:'检查并发布'}).click()
+  await expect(page.getByText('本地规则可能误判。你可以修改内容后重新发布，或将当前版本提交人工复核。')).toBeVisible()
+  await expect(page.getByText('标题',{exact:true})).toBeVisible()
+  await page.getByRole('button',{name:'正文第 2 个块（段落） · 定位'}).click()
+  await expect.poll(()=>page.locator('.tiptap > p:nth-child(2)').evaluate(node=>node.getAnimations().length)).toBeGreaterThan(0)
+  await page.getByRole('button',{name:'提交人工复核'}).click()
+  await expect(page.getByText('已提交人工复核，审核结果将在此显示。')).toBeVisible()
+  expect(submitted).toBe(true)
+  await expect(page).toHaveURL(/write\/42/)
+})
+
+test('a blocked comment shows the reason and keeps the text for editing',async({page})=>{
+  const state=await fixture(page,'<p>正文</p>');state.status='PUBLISHED'
+  await page.route('**/api/**/works/42/comments',async route=>{
+    if(route.request().method()==='GET')return route.fulfill({json:[]})
+    return route.fulfill({status:422,json:{message:'评论包含敏感内容，无法发出，请修改后重试。'}})
+  })
+  await page.goto('/#/work/42')
+  await page.getByLabel('评论内容').fill('含有敏感内容的评论')
+  await page.getByRole('button',{name:'发表评论'}).click()
+  await expect(page.getByRole('alert')).toHaveText('评论包含敏感内容，无法发出，请修改后重试。')
+  await expect(page.getByLabel('评论内容')).toHaveValue('含有敏感内容的评论')
 })

@@ -32,6 +32,9 @@ public class RetiredAvatarCleanup implements ApplicationRunner {
         if(db.one("SELECT media_id FROM work_media WHERE media_id=? LIMIT 1 FOR UPDATE",id)!=null){
             db.update("DELETE FROM retired_avatar_media WHERE media_id=?",id);return;
         }
+        if(db.one("SELECT media_id FROM work_draft_media WHERE media_id=? LIMIT 1 FOR UPDATE",id)!=null || db.one("SELECT media_id FROM work_version_media WHERE media_id=? LIMIT 1 FOR UPDATE",id)!=null) {
+            db.update("DELETE FROM retired_avatar_media WHERE media_id=?",id);return;
+        }
         if(!(id+".jpg").equals(file.get("filePath"))) {log.warn("Retired avatar has an unexpected file path; leaving it untouched");return;}
         Path target=root.resolve(id+".jpg").normalize();
         if(!target.startsWith(root))return;

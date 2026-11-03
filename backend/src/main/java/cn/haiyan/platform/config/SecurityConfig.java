@@ -26,12 +26,21 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/", "/index.html", "/assets/**", "/brand/**", "/favicon.svg",
                                 "/api/public/**", "/api/auth/me", "/api/auth/csrf", "/api/auth/registration-options", "/api/auth/remembered", "/api/media/**", "/actuator/health").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/quick-login", "/api/auth/remembered/forget", "/api/auth/register", "/api/auth/verification-code", "/api/auth/password-reset/code", "/api/auth/password-reset").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/public/traffic").permitAll()
                         .requestMatchers("/error").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/admin/overview").hasAnyRole("ADMIN","PUBLIC_EDITOR","PUBLIC_ACTIVITY","PUBLIC_TECH")
+                        .requestMatchers("/api/admin/article-reviews", "/api/admin/article-reviews/**").hasAnyRole("ADMIN","PUBLIC_STAFF")
+                        .requestMatchers(HttpMethod.GET, "/api/admin/overview").hasAnyRole("ADMIN","PUBLIC_STAFF")
                         .requestMatchers(HttpMethod.GET, "/api/admin/settings").hasAnyRole("ADMIN","PUBLIC_TECH")
                         .requestMatchers(HttpMethod.PUT, "/api/admin/settings").hasAnyRole("ADMIN","PUBLIC_TECH")
-                        .requestMatchers(HttpMethod.POST, "/api/admin/works/*/withdraw").hasAnyRole("ADMIN","PUBLIC_EDITOR")
-                        .requestMatchers(HttpMethod.POST, "/api/admin/tags").hasAnyRole("ADMIN","PUBLIC_ACTIVITY")
+                        .requestMatchers(HttpMethod.GET, "/api/admin/works", "/api/admin/works/*").hasAnyRole("ADMIN","PUBLIC_STAFF")
+                        .requestMatchers(HttpMethod.POST, "/api/admin/works/*/withdraw").hasAnyRole("ADMIN","PUBLIC_STAFF")
+                        .requestMatchers(HttpMethod.PUT, "/api/admin/works/*/featured").hasAnyRole("ADMIN","PUBLIC_STAFF")
+                        .requestMatchers(HttpMethod.POST, "/api/admin/tags").hasAnyRole("ADMIN","PUBLIC_STAFF")
+                        .requestMatchers(HttpMethod.PUT, "/api/admin/activities/*/availability").hasAnyRole("ADMIN","PUBLIC_STAFF")
+                        .requestMatchers(HttpMethod.DELETE, "/api/admin/activities/*", "/api/admin/works/*").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/admin/accounts/*").hasRole("SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/admin/works/*/approve").hasAnyRole("ADMIN","PUBLIC_STAFF")
+                        .requestMatchers(HttpMethod.PUT, "/api/admin/public-accounts/*/members").hasRole("SUPER_ADMIN")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .addFilterBefore(new org.springframework.web.filter.OncePerRequestFilter(){
@@ -40,7 +49,7 @@ public class SecurityConfig {
                         Long actorId=null, publicId=null;
                         if(auth!=null&&auth.isAuthenticated()&&!(auth instanceof org.springframework.security.authentication.AnonymousAuthenticationToken)){
                             var session=request.getSession(false);String actorName=identities.actor(session,auth.getName());
-                            var actor=store.one("SELECT id,role,password_hash,account_type FROM members WHERE username=?",actorName);
+                            var actor=store.one("SELECT id,role,password_hash,account_type FROM members WHERE username=? AND deleted_at IS NULL",actorName);
                             if(actor==null||session==null||!"PERSONAL".equals(actor.get("accountType"))||!java.util.Objects.equals(actor.get("passwordHash"),session.getAttribute("credentialHash"))){
                                 context.setAuthentication(null);if(session!=null){identities.release(session);session.invalidate();}
                             } else {
@@ -48,9 +57,8 @@ public class SecurityConfig {
                                 String role=(String)actor.get("role");var roles=new java.util.ArrayList<org.springframework.security.core.GrantedAuthority>();
                                 roles.add(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_"+role));
                                 if("SUPER_ADMIN".equals(role))roles.add(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ADMIN"));
-                                if(!"RESTRICTED".equals(role) && "haiyan_editor".equals(selected))roles.add(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_PUBLIC_EDITOR"));
-                                if(!"RESTRICTED".equals(role) && "haiyan_activity".equals(selected))roles.add(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_PUBLIC_ACTIVITY"));
-                                if(!"RESTRICTED".equals(role) && "haiyan_tech".equals(selected))roles.add(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_PUBLIC_TECH"));
+                                if(!"RESTRICTED".equals(role)&&!selected.equals(actorName))roles.add(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_PUBLIC_STAFF"));
+                                if(!"RESTRICTED".equals(role)&&"haiyan_tech".equals(selected))roles.add(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_PUBLIC_TECH"));
                                 context.setAuthentication(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(selected,null,roles));
                                 if(!selected.equals(actorName)){
                                     Object target=session.getAttribute(cn.haiyan.platform.service.IdentityService.SELECTED);if(target instanceof Number)publicId=((Number)target).longValue();
@@ -91,7 +99,7 @@ public class SecurityConfig {
     @Bean
     UserDetailsService userDetailsService(CommunityStore store) {
         return username -> {
-            var m=store.one("SELECT * FROM members WHERE username=?",username);
+            var m=store.one("SELECT * FROM members WHERE username=? AND deleted_at IS NULL",username);
             if(m==null)throw new UsernameNotFoundException("账号不存在");
             return User.withUsername(username).password((String)m.get("passwordHash")).roles((String)m.get("role")).build();
         };

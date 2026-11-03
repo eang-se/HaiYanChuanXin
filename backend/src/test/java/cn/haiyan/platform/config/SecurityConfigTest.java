@@ -50,16 +50,19 @@ class SecurityConfigTest {
         var session=new MockHttpSession();session.setAttribute("actorUsername","alice");session.setAttribute("credentialHash","hash");session.setAttribute("identityId",10L);
         when(identities.actor(session,"shared")).thenReturn("alice");
         when(identities.current(session,1L,"alice")).thenReturn("shared");
-        when(store.one("SELECT id,role,password_hash,account_type FROM members WHERE username=?","alice")).thenReturn(Map.of("id",1L,"role","MEMBER","passwordHash","hash","accountType","PERSONAL"));
+        when(store.one("SELECT id,role,password_hash,account_type FROM members WHERE username=? AND deleted_at IS NULL","alice")).thenReturn(Map.of("id",1L,"role","MEMBER","passwordHash","hash","accountType","PERSONAL"));
         mvc.perform(get("/api/admin/environment").session(session).with(user("shared"))).andExpect(status().isForbidden());
-        when(store.one("SELECT id,role,password_hash,account_type FROM members WHERE username=?","alice")).thenReturn(Map.of("id",1L,"role","SUPER_ADMIN","passwordHash","hash","accountType","PERSONAL"));
+        when(identities.current(session,1L,"alice")).thenReturn("alice");
+        mvc.perform(get("/api/admin/article-reviews").session(session).with(user("shared"))).andExpect(status().isForbidden());
+        when(identities.current(session,1L,"alice")).thenReturn("shared");
+        when(store.one("SELECT id,role,password_hash,account_type FROM members WHERE username=? AND deleted_at IS NULL","alice")).thenReturn(Map.of("id",1L,"role","SUPER_ADMIN","passwordHash","hash","accountType","PERSONAL"));
         mvc.perform(get("/api/admin/environment").session(session).with(user("shared"))).andExpect(status().isNotFound());
     }
     @Test
     void publicIdentityCannotEditPersonalProfile() throws Exception {
         var session=new MockHttpSession();session.setAttribute("actorUsername","alice");session.setAttribute("credentialHash","hash");session.setAttribute("identityId",10L);
         when(identities.actor(session,"shared")).thenReturn("alice");when(identities.current(session,1L,"alice")).thenReturn("shared");
-        when(store.one("SELECT id,role,password_hash,account_type FROM members WHERE username=?","alice")).thenReturn(Map.of("id",1L,"role","MEMBER","passwordHash","hash","accountType","PERSONAL"));
+        when(store.one("SELECT id,role,password_hash,account_type FROM members WHERE username=? AND deleted_at IS NULL","alice")).thenReturn(Map.of("id",1L,"role","MEMBER","passwordHash","hash","accountType","PERSONAL"));
         mvc.perform(put("/api/member/profile").session(session).with(user("shared")).with(csrf())).andExpect(status().isForbidden());
         mvc.perform(put("/api/member/pen-names/5").session(session).with(user("shared")).with(csrf())).andExpect(status().isForbidden());
     }
@@ -67,20 +70,22 @@ class SecurityConfigTest {
     void publicWorkspacesGrantOnlyTheirSpecificCapabilities() throws Exception {
         var session=new MockHttpSession();session.setAttribute("actorUsername","alice");session.setAttribute("credentialHash","hash");session.setAttribute("identityId",10L);
         when(identities.actor(session,"shared")).thenReturn("alice");
-        when(store.one("SELECT id,role,password_hash,account_type FROM members WHERE username=?","alice")).thenReturn(Map.of("id",1L,"role","MEMBER","passwordHash","hash","accountType","PERSONAL"));
+        when(store.one("SELECT id,role,password_hash,account_type FROM members WHERE username=? AND deleted_at IS NULL","alice")).thenReturn(Map.of("id",1L,"role","MEMBER","passwordHash","hash","accountType","PERSONAL"));
         when(identities.current(session,1L,"alice")).thenReturn("haiyan_editor");
         mvc.perform(get("/api/admin/overview").session(session).with(user("shared"))).andExpect(status().isNotFound());
+        mvc.perform(get("/api/admin/article-reviews").session(session).with(user("shared"))).andExpect(status().isNotFound());
+        mvc.perform(post("/api/admin/article-reviews/1/decision").session(session).with(user("shared")).with(csrf())).andExpect(status().isNotFound());
         mvc.perform(post("/api/admin/works/1/withdraw").session(session).with(user("shared")).with(csrf())).andExpect(status().isNotFound());
-        mvc.perform(post("/api/admin/tags").session(session).with(user("shared")).with(csrf())).andExpect(status().isForbidden());
+        mvc.perform(post("/api/admin/tags").session(session).with(user("shared")).with(csrf())).andExpect(status().isNotFound());
         mvc.perform(get("/api/admin/settings").session(session).with(user("shared"))).andExpect(status().isForbidden());
         when(identities.current(session,1L,"alice")).thenReturn("haiyan_activity");
         mvc.perform(post("/api/admin/tags").session(session).with(user("shared")).with(csrf())).andExpect(status().isNotFound());
-        mvc.perform(post("/api/admin/works/1/withdraw").session(session).with(user("shared")).with(csrf())).andExpect(status().isForbidden());
+        mvc.perform(post("/api/admin/works/1/withdraw").session(session).with(user("shared")).with(csrf())).andExpect(status().isNotFound());
         when(identities.current(session,1L,"alice")).thenReturn("haiyan_tech");
         mvc.perform(get("/api/admin/settings").session(session).with(user("shared"))).andExpect(status().isNotFound());
         mvc.perform(put("/api/admin/settings").session(session).with(user("shared")).with(csrf())).andExpect(status().isNotFound());
         mvc.perform(get("/api/admin/accounts").session(session).with(user("shared"))).andExpect(status().isForbidden());
-        when(store.one("SELECT id,role,password_hash,account_type FROM members WHERE username=?","alice")).thenReturn(Map.of("id",1L,"role","RESTRICTED","passwordHash","hash","accountType","PERSONAL"));
+        when(store.one("SELECT id,role,password_hash,account_type FROM members WHERE username=? AND deleted_at IS NULL","alice")).thenReturn(Map.of("id",1L,"role","RESTRICTED","passwordHash","hash","accountType","PERSONAL"));
         mvc.perform(get("/api/admin/settings").session(session).with(user("shared"))).andExpect(status().isForbidden());
     }
 }

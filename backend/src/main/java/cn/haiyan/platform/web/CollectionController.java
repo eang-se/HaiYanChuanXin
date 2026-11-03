@@ -33,16 +33,26 @@ public class CollectionController {
   if(s.store().count("SELECT COUNT(*) FROM collections WHERE author_id=? AND title=? AND id<>?",author,title,id==null?0:id)>0)throw error(400,"已有同名合集，请使用其他名称");
   if(!List.of("连载","诗集","选集").contains(f.kind()==null?"":f.kind()))throw error(400,"请选择合集类型");
   List<Long> ids=f.workIds()==null?List.of():f.workIds();if(ids.size()>500||new HashSet<>(ids).size()!=ids.size())throw error(400,"合集最多 500 篇，篇目不能重复");
+  Map<Long,Long> oldMembership=new LinkedHashMap<>();
+  if(id!=null)for(var row:s.store().list("SELECT id FROM works WHERE collection_id=? AND author_id=?",id,author))oldMembership.put(((Number)row.get("id")).longValue(),id);
   for(Long wid:ids){
    if(wid==null)throw error(400,"篇目无效");
    var work=s.store().one("SELECT id,collection_id FROM works WHERE id=? AND author_id=? FOR UPDATE",wid,author);
    if(work==null)throw error(404,"找不到你的稿件");
    if(work.get("collectionId") instanceof Number n&&(id==null||n.longValue()!=id))throw error(400,"一篇文章只能绑定一部合集，请先从原合集中移出");
+   oldMembership.putIfAbsent(wid,work.get("collectionId") instanceof Number n?n.longValue():0L);
   }
   if(id==null)id=s.store().insert("INSERT INTO collections(author_id,title,description,kind,published) VALUES(?,?,?,?,?)",author,title,description,f.kind(),f.published());
   else s.store().update("UPDATE collections SET title=?,description=?,kind=?,published=?,auto_created=FALSE,updated_at=CURRENT_TIMESTAMP WHERE id=?",title,description,f.kind(),f.published(),id);
   s.store().update("UPDATE works SET collection_id=NULL,collection_position=NULL WHERE collection_id=? AND author_id=?",id,author);
   for(int i=0;i<ids.size();i++)s.store().update("UPDATE works SET collection_id=?,collection_position=? WHERE id=? AND author_id=?",id,i,ids.get(i),author);
+  Set<Long> selected=new HashSet<>(ids);
+  for(var entry:oldMembership.entrySet()){
+   long wid=entry.getKey(),before=entry.getValue(),after=selected.contains(wid)?id:0;
+   s.store().update("UPDATE works SET edit_revision=edit_revision+1,updated_at=updated_at WHERE id=?",wid);
+   // Preserve an intentional different draft selection; update drafts still matching the former public association.
+   if(before!=after)s.store().update("UPDATE work_drafts SET payload=JSON_SET(payload,'$.collectionId',?),revision=revision+1 WHERE work_id=? AND COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.collectionId')),'null'),'0')=?",after,wid,String.valueOf(before));
+  }
   return Map.of("id",id);
  }
 }

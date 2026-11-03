@@ -15,6 +15,15 @@ class ArticleMediaTest {
     private final CommunityService service=mock(CommunityService.class);
     private final CommunityStore store=mock(CommunityStore.class);
     private final UploadController uploads=new UploadController(service,mock(AccountPermissions.class));
+    @Test void imageBudgetMetadataIsLimitedToTheCurrentPublishingAccount(){
+        String id="12345678-1234-1234-1234-123456789abc";
+        when(service.store()).thenReturn(store);when(service.memberId("author")).thenReturn(29L);
+        when(store.one("SELECT size_bytes FROM media_files WHERE id=? AND owner_id=?",id,29L)).thenReturn(Map.of("sizeBytes",12345L));
+        assertEquals(Map.of("/api/media/"+id,12345L),uploads.imageSizes(id+","+id,()->"author"));
+        when(store.one("SELECT size_bytes FROM media_files WHERE id=? AND owner_id=?",id,29L)).thenReturn(null);
+        assertThrows(ResponseStatusException.class,()->uploads.imageSizes(id,()->"author"));
+        assertThrows(ResponseStatusException.class,()->uploads.imageSizes("bad-id",()->"author"));
+    }
     @Test void serverRejectsDisguisedFilesOversizedFilesAndDimensions() throws Exception {
         assertThrows(ResponseStatusException.class,()->uploads.image(new MockMultipartFile("file","fake.png","image/png",new byte[]{1,2,3}),()->"author"));
         assertThrows(ResponseStatusException.class,()->uploads.image(new MockMultipartFile("file","large.png","image/png",new byte[5*1024*1024+1]),()->"author"));
@@ -33,5 +42,21 @@ class ArticleMediaTest {
         when(service.member("author")).thenReturn(Map.of("id",29L));assertEquals(200,uploads.media(id,()->"author").getStatusCode().value());
         when(store.count("SELECT COUNT(*) FROM work_media wm JOIN works w ON w.id=wm.work_id WHERE wm.media_id=? AND w.status='PUBLISHED'",id)).thenReturn(1L);
         var response=uploads.media(id,null);assertEquals(200,response.getStatusCode().value());assertEquals("no-store",response.getHeaders().getCacheControl());
+    }
+    @Test void reviewersCanPreviewLinkedPrivateImagesButNotUnattachedUploads() {
+        String id="12345678-1234-1234-1234-123456789abc";
+        when(service.store()).thenReturn(store);
+        when(store.one("SELECT * FROM media_files WHERE id=?",id)).thenReturn(Map.of("ownerId",29L,"filePath",id+".jpg"));
+        when(service.member("reviewer")).thenReturn(Map.of("id",30L));
+        var context=org.springframework.security.core.context.SecurityContextHolder.getContext();
+        try {
+            for(String role:java.util.List.of("ROLE_ADMIN","ROLE_PUBLIC_STAFF")){
+                context.setAuthentication(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("reviewer",null,java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority(role))));
+                when(store.count("SELECT COUNT(*) FROM work_media wm JOIN works w ON w.id=wm.work_id WHERE wm.media_id=? AND w.status<>'DRAFT'",id)).thenReturn(1L);
+                assertEquals(200,uploads.media(id,()->"reviewer").getStatusCode().value());
+                when(store.count("SELECT COUNT(*) FROM work_media wm JOIN works w ON w.id=wm.work_id WHERE wm.media_id=? AND w.status<>'DRAFT'",id)).thenReturn(0L);
+                assertThrows(ResponseStatusException.class,()->uploads.media(id,()->"reviewer"));
+            }
+        } finally {org.springframework.security.core.context.SecurityContextHolder.clearContext();}
     }
 }

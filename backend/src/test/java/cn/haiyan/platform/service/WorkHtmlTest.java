@@ -19,7 +19,7 @@ class WorkHtmlTest {
     }
     @Test void nestedDisclosuresFlattenAndRemainEditable() {
         var doc=WorkHtml.clean("<details><summary>外层</summary><div data-disclosure-body><p>起</p><details><summary>内层</summary><div data-disclosure-body><p>终</p></div></details></div></details>");
-        assertEquals(1,doc.select("details").size());assertEquals(1,doc.select("summary").size());
+        assertEquals(0,doc.select("details").size());assertEquals(0,doc.select("summary").size());assertEquals(4,doc.select("p").size());
         assertTrue(doc.text().contains("内层"));assertTrue(doc.text().contains("终"));
         assertEquals(doc.body().html(),WorkHtml.clean(doc.body().html()).body().html());
     }

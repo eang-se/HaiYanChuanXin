@@ -23,6 +23,8 @@ class RetiredAvatarCleanupTest {
         var db=mock(CommunityStore.class);var file=root.resolve(ID+".jpg");Files.writeString(file,"image");
         when(db.one("SELECT file_path FROM media_files WHERE id=? FOR UPDATE",ID)).thenReturn(Map.of("filePath",ID+".jpg"));
         when(db.one("SELECT media_id FROM work_media WHERE media_id=? LIMIT 1 FOR UPDATE",ID)).thenReturn(null);
+        when(db.one("SELECT media_id FROM work_draft_media WHERE media_id=? LIMIT 1 FOR UPDATE",ID)).thenReturn(null);
+        when(db.one("SELECT media_id FROM work_version_media WHERE media_id=? LIMIT 1 FOR UPDATE",ID)).thenReturn(null);
         new RetiredAvatarCleanup(db,mock(TransactionTemplate.class),root).clean(ID);
         assertFalse(Files.exists(file));verify(db).update("DELETE FROM media_files WHERE id=?",ID);
     }
@@ -31,5 +33,17 @@ class RetiredAvatarCleanupTest {
         when(db.one("SELECT file_path FROM media_files WHERE id=? FOR UPDATE",ID)).thenReturn(Map.of("filePath","other.jpg"));
         new RetiredAvatarCleanup(db,mock(TransactionTemplate.class),root).clean(ID);
         assertTrue(Files.exists(file));verify(db,never()).update("DELETE FROM media_files WHERE id=?",ID);
+    }
+    @Test void preservesMediaReferencedByDraftOrHistory() throws Exception {
+        for(String relation:java.util.List.of("work_draft_media","work_version_media")){
+            var db=mock(CommunityStore.class);var file=root.resolve(ID+".jpg");Files.writeString(file,"image");
+            when(db.one("SELECT file_path FROM media_files WHERE id=? FOR UPDATE",ID)).thenReturn(Map.of("filePath",ID+".jpg"));
+            when(db.one("SELECT media_id FROM work_media WHERE media_id=? LIMIT 1 FOR UPDATE",ID)).thenReturn(null);
+            when(db.one("SELECT media_id FROM work_draft_media WHERE media_id=? LIMIT 1 FOR UPDATE",ID)).thenReturn(null);
+            when(db.one("SELECT media_id FROM work_version_media WHERE media_id=? LIMIT 1 FOR UPDATE",ID)).thenReturn(null);
+            when(db.one("SELECT media_id FROM "+relation+" WHERE media_id=? LIMIT 1 FOR UPDATE",ID)).thenReturn(Map.of("mediaId",ID));
+            new RetiredAvatarCleanup(db,mock(TransactionTemplate.class),root).clean(ID);
+            assertTrue(Files.exists(file));verify(db,never()).update("DELETE FROM media_files WHERE id=?",ID);
+        }
     }
 }

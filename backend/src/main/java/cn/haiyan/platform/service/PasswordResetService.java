@@ -17,7 +17,7 @@ public class PasswordResetService {
  public PasswordResetService(CommunityStore db,RegistrationPolicy policy,VerificationDelivery delivery,PasswordEncoder encoder){this.db=db;this.policy=policy;this.delivery=delivery;this.encoder=encoder;}
  private Map<String,Object> member(String username){
   if(username==null||!username.matches("[a-zA-Z0-9_]{3,30}"))return null;
-  var m=db.one("SELECT id,qq_number FROM members WHERE username=? AND account_type='PERSONAL'",username);
+  var m=db.one("SELECT id,qq_number FROM members WHERE username=? AND account_type='PERSONAL' AND deleted_at IS NULL",username);
   return m!=null&&m.get("qqNumber") instanceof String q&&q.matches("[1-9][0-9]{4,11}")?m:null;
  }
  @Transactional(noRollbackFor=ResponseStatusException.class)

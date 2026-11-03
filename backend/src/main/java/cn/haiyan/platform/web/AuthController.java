@@ -26,7 +26,7 @@ public class AuthController {
     private Map<String,Object> view(String username,HttpSession session){
         var current=service.member(username);var actor=service.member(identities.actor(session,username));
         current.put("accountType",Objects.requireNonNullElse(current.get("accountType"),"PERSONAL"));
-        current.put("actorId",actor.get("id"));current.put("actorRole",actor.get("role"));current.put("permissions",permissions.currentEffective(username));
+        current.put("actorId",actor.get("id"));current.put("actorRole",actor.get("role"));current.put("actorPenName",actor.get("penName"));current.put("actorUsername",actor.get("username"));current.put("permissions",permissions.currentEffective(username));
         return current;
     }
     @GetMapping("/identities") public Map<String,Object> listIdentities(Principal principal,HttpServletRequest request){
@@ -49,7 +49,7 @@ public class AuthController {
     }
     public record Login(String username,String password,Boolean remember){public Login(String username,String password){this(username,password,Boolean.FALSE);}}
     @PostMapping("/login") public Map<String,Object> login(@RequestBody Login form,HttpServletRequest request,HttpServletResponse response) {
-        var m=service.store().one("SELECT * FROM members WHERE username=?",form.username());
+        var m=service.store().one("SELECT * FROM members WHERE username=? AND deleted_at IS NULL",form.username());
         if(m==null || !"PERSONAL".equals(m.get("accountType")) || form.password()==null || !encoder.matches(form.password(),(String)m.get("passwordHash")))throw error(401,"账号或密码不正确");
         if(Boolean.TRUE.equals(form.remember()))remembered.remember(request,response,m);else remembered.forget(request,response);
         return establish(m,request,response);

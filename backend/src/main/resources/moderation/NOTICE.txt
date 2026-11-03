@@ -1,0 +1,4 @@
+广告词表来自 fwwdn/sensitive-stop-words，Apache License 2.0。
+Source: https://github.com/fwwdn/sensitive-stop-words
+Commit: a7d06bb1c321e669943b6841570d9da6dad8ce2b
+运行时只加载长度至少四个字符的词条，以减少短词误判；原始文件未修改。

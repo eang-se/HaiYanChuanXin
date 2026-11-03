@@ -13,7 +13,7 @@ import static org.mockito.ArgumentMatchers.*;
 class RememberedDeviceServiceTest {
  private final CommunityStore db=mock(CommunityStore.class);
  private final RememberedDeviceService remembered=new RememberedDeviceService(db);
- private static final String QUERY="SELECT d.selector,d.token_hash,d.credential_hash,m.id,m.username,m.pen_name,m.qq_number,m.password_hash,m.account_type,m.role FROM remembered_devices d JOIN members m ON m.id=d.member_id WHERE d.selector=? AND d.expires_at>CURRENT_TIMESTAMP";
+ private static final String QUERY="SELECT d.selector,d.token_hash,d.credential_hash,m.id,m.username,m.pen_name,m.qq_number,m.password_hash,m.account_type,m.role FROM remembered_devices d JOIN members m ON m.id=d.member_id WHERE d.selector=? AND d.expires_at>CURRENT_TIMESTAMP AND m.deleted_at IS NULL";
  private MockHttpServletRequest local(){var req=new MockHttpServletRequest();req.setServerName("127.0.0.1");req.setRemoteAddr("127.0.0.1");return req;}
  @Test void deviceCookieIsHttpOnlyAndTokenIsStoredAsHash(){
   var request=local();var response=new MockHttpServletResponse();

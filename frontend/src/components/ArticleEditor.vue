@@ -1,27 +1,44 @@
 <script setup lang="ts">
-import {computed,nextTick,onBeforeUnmount,ref,watch} from 'vue'
+import {computed,nextTick,onBeforeUnmount,ref,reactive,watch} from 'vue'
 import {EditorContent,useEditor} from '@tiptap/vue-3'
+import type {JSONContent} from '@tiptap/core'
 import {api,message,notify} from '../api'
 import {articleExtensions} from '../article/editorExtensions'
 import {sanitizeArticle,mediaPath} from '../article/html'
-import {prepareImage} from '../article/imageUpload'
+import {prepareImage,ARTICLE_IMAGE_LIMIT} from '../article/imageUpload'
+import {expandArticleDocument} from '../article/document'
 import {layoutClasses,resolveLayout,type ArticleLayout} from '../article/layout'
 import ArticleBody from './ArticleBody.vue'
 import Icon from './Icon.vue'
 import '../article/article.css'
 
-const props = defineProps<{modelValue:string; disabled?:boolean; genre?:string; layout?:ArticleLayout}>()
+const props = defineProps<{modelValue:string; document?:JSONContent|null; disabled?:boolean; genre?:string; layout?:ArticleLayout;cover?:string}>()
 const presentation=computed(()=>resolveLayout(props.layout,props.genre))
-const emit = defineEmits<{ 'update:modelValue':[value:string]; count:[value:number]; pending:[value:boolean]; composition:[value:boolean] }>()
+const emit = defineEmits<{ 'update:modelValue':[value:string]; 'update:document':[value:JSONContent]; count:[value:number]; pending:[value:boolean]; composition:[value:boolean] }>()
 const preview = ref(false), imageInput = ref<HTMLInputElement|null>(null), insertButton = ref<HTMLButtonElement|null>(null)
 const uploading = ref(false), uploadError = ref(''), failedFile = ref<File|null>(null), composing = ref(false)
+const sizes=reactive<Record<string,number>>({}),budgetError=ref('')
+const imageSources=computed(()=>{
+  const doc=new DOMParser().parseFromString(props.modelValue,'text/html')
+  return [...new Set([...Array.from(doc.querySelectorAll('img')).map(img=>img.getAttribute('src')||''),props.cover||''].filter(src=>mediaPath.test(src)))]
+})
+const imageBytes=computed(()=>imageSources.value.reduce((total,src)=>total+(sizes[src]||0),0))
+let metadataTask:Promise<void>|null=null
+async function ensureSizes(){
+  if(metadataTask)await metadataTask
+  const unknown=imageSources.value.filter(src=>sizes[src]===undefined)
+  if(!unknown.length){budgetError.value='';return}
+  metadataTask=(async()=>{for(let offset=0;offset<unknown.length;offset+=100){const batch=unknown.slice(offset,offset+100);const {data}=await api.get('/member/images/sizes',{params:{ids:batch.map(src=>src.split('/').at(-1)).join(',')}});for(const src of batch){const bytes=Number(data[src]);if(!Number.isFinite(bytes)||bytes<0)throw new Error('无法确认图片占用，请重试');sizes[src]=bytes}}})()
+  try{await metadataTask;budgetError.value=''}finally{metadataTask=null}
+}
+watch(()=>imageSources.value.join(','),()=>{void ensureSizes().catch(e=>{budgetError.value=message(e)})},{immediate:true})
 let uploadTask:Promise<void>|null = null, uploadPosition:number|null = null, finishComposition:(()=>void)|null = null, compositionTask:Promise<void>|null = null
 const menu = ref(false), menuIndex = ref(0), menuPosition = ref({top:0,left:0}), slashFrom = ref<number|null>(null)
 let dismissedAt:number|null = null
 const choices = [
   {id:'paragraph',label:'正文段落'}, {id:'heading2',label:'小标题'}, {id:'heading3',label:'次级小标题'},
   {id:'quote',label:'引用'}, {id:'bullet',label:'无序列表'}, {id:'ordered',label:'有序列表'},
-  {id:'image',label:'图片'}, {id:'divider',label:'分隔线'}, {id:'disclosure',label:'折叠内容'},
+  {id:'image',label:'图片'}, {id:'divider',label:'分隔线'},
 ]
 const editor = useEditor({
   extensions:articleExtensions(), content:sanitizeArticle(props.modelValue), editable:!props.disabled,
@@ -63,13 +80,21 @@ const editor = useEditor({
 })
 function sync() {
   if (!editor.value) return
-  emit('update:modelValue',editor.value.getHTML()); emit('count',Array.from(editor.value.getText().replace(/\s/g,'')).length)
+  emit('update:modelValue',editor.value.getHTML()); emit('update:document',editor.value.getJSON()); emit('count',Array.from(editor.value.getText().replace(/\s/g,'')).length)
 }
-watch(() => props.modelValue,value => {
-  if (editor.value && value!==editor.value.getHTML()) { editor.value.commands.setContent(sanitizeArticle(value),{emitUpdate:false}); emit('count',Array.from(editor.value.getText().replace(/\s/g,'')).length) }
+// Older works have HTML only. Invalid or unsupported stored documents fall back to the
+// sanitized HTML snapshot instead of silently dropping unknown nodes.
+watch(() => [props.modelValue,props.document] as const,([html,document]) => {
+  const e=editor.value
+  if (!e) return
+  if (html===e.getHTML() && (!document || JSON.stringify(document)===JSON.stringify(e.getJSON()))) return
+  if(document) {
+    try { e.commands.setContent(expandArticleDocument(document),{emitUpdate:false,errorOnInvalidContent:true}) }
+    catch { e.commands.setContent(sanitizeArticle(html),{emitUpdate:false}) }
+  } else e.commands.setContent(sanitizeArticle(html),{emitUpdate:false})
+  emit('count',Array.from(e.getText().replace(/\s/g,'')).length)
 })
-watch(() => props.disabled,value => editor.value?.setEditable(!value))
-const inDisclosure = computed(() => editor.value?.isActive('disclosure'))
+watch(() => props.disabled,value => editor.value?.setEditable(!value,false))
 const selectedImage = computed(() => editor.value?.isActive('image'))
 const imageSize = computed(() => editor.value?.getAttributes('image').size)
 function positionMenu(rect:{bottom:number;left:number}) {
@@ -102,7 +127,7 @@ function scrollChoice() { void nextTick(() => {
 }) }
 function choose(kind:string) {
   const e=editor.value
-  if(!e || props.disabled || (kind==='disclosure'&&inDisclosure.value))return
+  if(!e || props.disabled)return
   const start=slashFrom.value; closeMenu()
   if(start!==null)e.chain().focus().deleteRange({from:start,to:start+1}).run()
   const chain=e.chain().focus()
@@ -115,7 +140,6 @@ function choose(kind:string) {
     case 'ordered':chain.toggleOrderedList().run();break
     case 'divider':chain.setHorizontalRule().run();break
     case 'image':imageInput.value?.click();break
-    case 'disclosure':chain.insertContent({type:'disclosure',content:[{type:'disclosureTitle',content:[{type:'text',text:'折叠内容'}]},{type:'disclosureBody',content:[{type:'paragraph'}]}]}).run();break
   }
 }
 async function upload(file:File) {
@@ -124,9 +148,16 @@ async function upload(file:File) {
   uploadPosition=editor.value?.state.selection.to ?? null
   uploadTask=(async()=>{
     try {
-      const prepared=await prepareImage(file), data=new FormData(); data.append('file',prepared)
+      await ensureSizes()
+      const remaining=ARTICLE_IMAGE_LIMIT-imageBytes.value
+      const prepared=await prepareImage(file,remaining), data=new FormData(); data.append('file',prepared)
       const response=await api.post('/member/images',data)
       if(!mediaPath.test(response.data.url))throw new Error('上传返回了无效图片地址，请重试')
+      const bytes=Number(response.data.sizeBytes??prepared.size)
+      if(!Number.isFinite(bytes)||bytes<0)throw new Error('上传返回了无效图片大小，请重试')
+      await ensureSizes()
+      if(imageBytes.value+(imageSources.value.includes(response.data.url)?0:bytes)>ARTICLE_IMAGE_LIMIT)throw new Error('一篇文章的图片总大小不能超过 5 MB，请先删除部分图片')
+      sizes[response.data.url]=bytes
       const e=editor.value
       if(!e || e.isDestroyed)return
       const position=Math.min(uploadPosition??e.state.selection.to,e.state.doc.content.size)
@@ -146,40 +177,61 @@ function escapeMenu(event:KeyboardEvent) { if(event.key==='Escape'&&menu.value){
 window.addEventListener('pointerdown',outside); window.addEventListener('keydown',escapeMenu)
 onBeforeUnmount(() => { window.removeEventListener('pointerdown',outside); window.removeEventListener('keydown',escapeMenu); finishComposition?.(); editor.value?.destroy() })
 defineExpose({
-  async settle() { if(compositionTask)await compositionTask; if(uploadTask)await uploadTask; return !failedFile.value },
-  replaceContent(html:string) { editor.value?.commands.setContent(sanitizeArticle(html)); sync() },
+  async settle() { if(compositionTask)await compositionTask; if(uploadTask)await uploadTask;try{await ensureSizes()}catch(e){budgetError.value=message(e);return false}return !failedFile.value&&imageBytes.value<=ARTICLE_IMAGE_LIMIT },
+  replaceContent(html:string, document?:JSONContent|null) {
+    const e=editor.value
+    if(!e)return
+    if(document) {
+      try { e.commands.setContent(expandArticleDocument(document),{errorOnInvalidContent:true}) }
+      catch { e.commands.setContent(sanitizeArticle(html)) }
+    } else e.commands.setContent(sanitizeArticle(html))
+    sync()
+  },
+  getSnapshot() { const e=editor.value; return e ? {body:e.getHTML(),bodyJson:e.getJSON()} : null },
+  async revealBlock(index:number,tag:string,structure:string[]) {
+    preview.value=false
+    await nextTick()
+    const e=editor.value, target=e?.view.dom.children.item(index-1) as HTMLElement|null
+    const actual=e?Array.from(e.view.dom.children,element=>element.tagName.toLowerCase()):[]
+    if(!target||target.tagName.toLowerCase()!==tag||actual.length!==structure.length||actual.some((name,i)=>name!==structure[i]))return false
+    target.scrollIntoView({behavior:'smooth',block:'center'})
+    target.animate([{outline:'3px solid #d99270',outlineOffset:'6px'},{outline:'3px solid #d99270',outlineOffset:'6px'},{outline:'3px solid transparent',outlineOffset:'6px'}],{duration:3500})
+    return true
+  },
   preview,
 })
 </script>
 
 <template>
   <div class="editor-controls">
-  <div class="editor-toolbar">
+  <div class="editor-toolbar" role="group" aria-label="正文格式工具">
     <template v-if="!preview">
       <button ref="insertButton" class="block-insert-toggle" aria-haspopup="menu" :aria-expanded="menu" :disabled="disabled" @click="toggleMenu"><Icon name="Plus"/>插入</button>
-      <button aria-label="加粗" :aria-pressed="editor?.isActive('bold')" :disabled="disabled" @click="editor?.chain().focus().toggleBold().run()"><Icon name="Bold"/></button>
-      <button aria-label="斜体" :aria-pressed="editor?.isActive('italic')" :disabled="disabled" @click="editor?.chain().focus().toggleItalic().run()"><Icon name="Italic"/></button>
-      <button aria-label="小标题" :disabled="disabled" @click="editor?.chain().focus().toggleHeading({level:2}).run()"><Icon name="Heading2"/></button>
-      <button aria-label="引用" :disabled="disabled" @click="editor?.chain().focus().toggleBlockquote().run()"><Icon name="Quote"/></button>
-      <button aria-label="无序列表" :disabled="disabled" @click="editor?.chain().focus().toggleBulletList().run()"><Icon name="List"/></button>
-      <button aria-label="有序列表" :disabled="disabled" @click="editor?.chain().focus().toggleOrderedList().run()">1.</button>
-      <button aria-label="插入图片" :disabled="disabled||uploading" @click="imageInput?.click()"><Icon name="Image"/></button>
-      <button aria-label="撤销" :disabled="disabled||!editor?.can().undo()" @click="editor?.chain().focus().undo().run()"><Icon name="Undo"/></button>
-      <button aria-label="重做" :disabled="disabled||!editor?.can().redo()" @click="editor?.chain().focus().redo().run()"><Icon name="Redo"/></button>
+      <button aria-label="加粗" title="加粗" :aria-pressed="editor?.isActive('bold')" :disabled="disabled" @click="editor?.chain().focus().toggleBold().run()"><Icon name="Bold"/></button>
+      <button aria-label="斜体" title="斜体" :aria-pressed="editor?.isActive('italic')" :disabled="disabled" @click="editor?.chain().focus().toggleItalic().run()"><Icon name="Italic"/></button>
+      <button aria-label="小标题" title="小标题" :aria-pressed="editor?.isActive('heading',{level:2})" :disabled="disabled" @click="editor?.chain().focus().toggleHeading({level:2}).run()"><Icon name="Heading2"/></button>
+      <button aria-label="引用" title="引用" :aria-pressed="editor?.isActive('blockquote')" :disabled="disabled" @click="editor?.chain().focus().toggleBlockquote().run()"><Icon name="Quote"/></button>
+      <button aria-label="无序列表" title="无序列表" :aria-pressed="editor?.isActive('bulletList')" :disabled="disabled" @click="editor?.chain().focus().toggleBulletList().run()"><Icon name="List"/></button>
+      <button aria-label="有序列表" title="有序列表" :aria-pressed="editor?.isActive('orderedList')" :disabled="disabled" @click="editor?.chain().focus().toggleOrderedList().run()">1.</button>
+      <button aria-label="插入图片" title="插入图片" :disabled="disabled||uploading" @click="imageInput?.click()"><Icon name="Image"/></button>
+      <button aria-label="撤销" title="撤销" :disabled="disabled||!editor?.can().undo()" @click="editor?.chain().focus().undo().run()"><Icon name="Undo"/></button>
+      <button aria-label="重做" title="重做" :disabled="disabled||!editor?.can().redo()" @click="editor?.chain().focus().redo().run()"><Icon name="Redo"/></button>
     </template>
-    <button class="preview-toggle" :disabled="composing" @click="preview=!preview;closeMenu()">{{preview?'继续编辑':'阅读预览'}}</button>
+    <button class="preview-toggle" :aria-pressed="preview" :disabled="disabled||composing" @click="preview=!preview;closeMenu()"><Icon :name="preview?'Feather':'BookOpen'" :size="14"/>{{preview?'继续编辑':'阅读预览'}}</button>
   </div>
   <div v-if="selectedImage&&!preview" class="image-controls" aria-label="图片显示设置"><span>图片宽度</span>
     <button :class="{selected:imageSize==='full'}" @click="editor?.chain().focus().updateAttributes('image',{size:'full'}).run()">正文宽度</button>
     <button :class="{selected:imageSize==='narrow'}" @click="editor?.chain().focus().updateAttributes('image',{size:'narrow'}).run()">较窄显示</button>
   </div>
   <div v-if="uploading" class="upload-status" role="status">图片处理中… 保存会等待上传完成</div>
+  <p class="image-budget" :class="{'is-over':imageBytes>ARTICLE_IMAGE_LIMIT}" aria-live="polite">图片自动压缩 · 本篇 {{(imageBytes/1024/1024).toFixed(2)}} / 5 MB<span v-if="cover">（含封面）</span></p>
+  <div v-if="budgetError||imageBytes>ARTICLE_IMAGE_LIMIT" class="upload-status failed" role="alert">{{budgetError||'本篇图片总大小超过 5 MB，请删除部分图片后保存。'}}<button v-if="budgetError" type="button" @click="ensureSizes().catch(e=>budgetError=message(e))">重试检查</button></div>
   <div v-if="uploadError" class="upload-status failed" role="alert"><span>{{uploadError}}，图片尚未插入，正文仍保留。</span><button @click="failedFile&&upload(failedFile)">重试图片</button><button @click="cancelFailedImage">取消本次图片</button></div>
   </div>
   <EditorContent v-show="!preview" :editor="editor" class="writing-area" :class="layoutClasses(presentation)"/>
   <ArticleBody v-if="preview" :html="modelValue" :genre="genre" :layout="presentation" compact class="preview-area"/>
   <Teleport to="body"><div v-if="menu&&!preview" class="block-menu" role="menu" aria-label="插入内容" :style="{top:menuPosition.top+'px',left:menuPosition.left+'px'}" @keydown.down.prevent="menuIndex=(menuIndex+1)%choices.length;scrollChoice()" @keydown.up.prevent="menuIndex=(menuIndex+choices.length-1)%choices.length;scrollChoice()" @keydown.enter.prevent="choose(choices[menuIndex]!.id)">
-    <button v-for="(choice,index) in choices" :id="`article-insert-${index}`" :key="choice.id" role="menuitem" :class="{active:index===menuIndex}" :disabled="(choice.id==='disclosure'&&inDisclosure)||(choice.id==='image'&&uploading)" @pointerdown.prevent @click="choose(choice.id)" @focus="menuIndex=index">{{choice.label}}</button>
+    <button v-for="(choice,index) in choices" :id="`article-insert-${index}`" :key="choice.id" role="menuitem" :class="{active:index===menuIndex}" :disabled="choice.id==='image'&&uploading" @pointerdown.prevent @click="choose(choice.id)" @focus="menuIndex=index">{{choice.label}}</button>
   </div></Teleport>
   <input ref="imageInput" class="visually-hidden" type="file" accept="image/jpeg,image/png" @change="selectedFile"/>
 </template>

@@ -15,19 +15,27 @@ public class AccountPermissions {
   return result;
  }
  public Map<String,Boolean> currentEffective(String username){
-  var m=db.one("SELECT id,role,account_type FROM members WHERE username=?",username);if(m==null)throw error(401,"请先登录");
+  var m=db.one("SELECT id,role,account_type FROM members WHERE username=? AND deleted_at IS NULL",username);if(m==null)throw error(401,"请先登录");
   var result=effective(((Number)m.get("id")).longValue(),(String)m.get("role"));
   if("PUBLIC".equals(m.get("accountType"))){
    var attributes=RequestContextHolder.getRequestAttributes();
    var session=attributes instanceof ServletRequestAttributes a?a.getRequest().getSession(false):null;
    Object actorName=session==null?null:session.getAttribute("actorUsername");
    if(!(actorName instanceof String actorUsername))throw error(403,"公用身份需要个人账号授权");
-   var actor=db.one("SELECT id,role,account_type FROM members WHERE username=?",actorUsername);
+   var actor=db.one("SELECT id,role,account_type FROM members WHERE username=? AND deleted_at IS NULL",actorUsername);
    if(actor==null||!"PERSONAL".equals(actor.get("accountType")))throw error(403,"个人账号不可用");
    var actorPermissions=effective(((Number)actor.get("id")).longValue(),(String)actor.get("role"));
-   result.replaceAll((key,value)->value&&Boolean.TRUE.equals(actorPermissions.get(key)));
+   // Common public publishing abilities do not come from the stored public role
+   // or its old per-account overrides. A restricted operator cannot borrow them.
+   boolean active=!"RESTRICTED".equals(actor.get("role"));
+   result.replaceAll((key,value)->active&&(Set.of("WRITE","UPLOAD","COLLECTIONS").contains(key)||Boolean.TRUE.equals(actorPermissions.get(key))));
   }
   return result;
  }
  public void require(String username,String code){if(!Boolean.TRUE.equals(currentEffective(username).get(code)))throw error(403,"当前账号未获此项权限");}
+ public void requireOwnDeletion(String username){
+  var account=db.one("SELECT account_type FROM members WHERE username=? AND deleted_at IS NULL",username);
+  if(account==null)throw error(401,"账号不可用");
+  if("PUBLIC".equals(account.get("accountType")))ManagementAccess.requireAdmin();
+ }
 }

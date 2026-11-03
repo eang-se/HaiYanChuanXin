@@ -15,7 +15,7 @@ public class AdminSettingsController {
  private Map<String,Object> actor(Principal principal){
   var attrs=RequestContextHolder.getRequestAttributes();var session=attrs instanceof ServletRequestAttributes a?a.getRequest().getSession(false):null;
   Object stored=session==null?null:session.getAttribute("actorUsername");String username=stored instanceof String s?s:principal.getName();
-  var actor=db.one("SELECT id,role,account_type FROM members WHERE username=?",username);
+  var actor=db.one("SELECT id,role,account_type FROM members WHERE username=? AND deleted_at IS NULL",username);
   if(actor==null||!"PERSONAL".equals(actor.get("accountType"))||!List.of("ADMIN","SUPER_ADMIN").contains(actor.get("role")))throw error(403,"需要管理员权限");return actor;
  }
  @GetMapping("/settings") public Map<String,Object> settings(){return Map.of("siteName",policy.setting("site_name","海燕传信"),"siteDescription",policy.setting("site_description",""),"registrationEnabled",policy.enabled(),"registrationMode",policy.testMode()?"test":"live","permissionCatalog",AccountPermissions.CATALOG);}
@@ -27,21 +27,36 @@ public class AdminSettingsController {
   if(!admin&&(f.registrationEnabled()!=policy.enabled()||!f.registrationMode().equals(policy.testMode()?"test":"live")))throw error(403,"注册设置需要管理员权限");
   for(var e:Map.of("site_name",name,"site_description",description,"registration_enabled",String.valueOf(f.registrationEnabled()),"registration_mode",f.registrationMode()).entrySet())db.update("INSERT INTO platform_metadata(setting_key,setting_value) VALUES(?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value)",e.getKey(),e.getValue());
  }
- @GetMapping("/accounts") public List<Map<String,Object>> accounts(){return db.list("SELECT id,username,pen_name,role,account_type,qq_number,created_at FROM members ORDER BY id DESC");}
- @GetMapping("/accounts/{id}/permissions") public Map<String,Object> account(@PathVariable long id){var m=db.one("SELECT id,username,role,account_type FROM members WHERE id=?",id);if(m==null)throw error(404,"账号不存在");m.put("permissions",permissions.effective(id,(String)m.get("role")));return m;}
+ @GetMapping("/accounts") public List<Map<String,Object>> accounts(){return db.list("SELECT id,username,pen_name,role,account_type,qq_number,created_at FROM members WHERE deleted_at IS NULL ORDER BY id DESC");}
+ @GetMapping("/accounts/{id}/permissions") public Map<String,Object> account(@PathVariable long id){var m=db.one("SELECT id,username,role,account_type FROM members WHERE id=? AND deleted_at IS NULL",id);if(m==null)throw error(404,"账号不存在");m.put("permissions",permissions.effective(id,(String)m.get("role")));return m;}
  public record PermissionInput(String role,Map<String,Boolean> permissions){}
+ @DeleteMapping("/accounts/{id}") @Transactional public void deleteAccount(@PathVariable long id,Principal p){
+  var operator=actor(p);if(!"SUPER_ADMIN".equals(operator.get("role")))throw error(403,"只有个人超级管理员可以删除用户");
+  var supers=db.list("SELECT id FROM members WHERE role='SUPER_ADMIN' AND account_type='PERSONAL' AND deleted_at IS NULL FOR UPDATE");
+  var target=db.one("SELECT id,role,account_type FROM members WHERE id=? AND deleted_at IS NULL FOR UPDATE",id);
+  if(target==null)throw error(404,"用户不存在");
+  if(!"PERSONAL".equals(target.get("accountType")))throw error(400,"不能删除公用账号");
+  if(((Number)operator.get("id")).longValue()==id)throw error(400,"不能删除当前登录的个人账号");
+  if("SUPER_ADMIN".equals(target.get("role"))&&supers.size()<2)throw error(400,"必须至少保留一位超级管理员");
+  db.update("DELETE FROM public_account_sessions WHERE actor_id=?",id);
+  db.update("DELETE FROM public_account_members WHERE member_id=?",id);
+  db.update("DELETE FROM remembered_devices WHERE member_id=?",id);
+  db.update("DELETE FROM password_reset_codes WHERE member_id=?",id);
+  db.update("DELETE FROM member_permissions WHERE member_id=?",id);
+  db.update("UPDATE members SET deleted_at=CURRENT_TIMESTAMP,role='RESTRICTED' WHERE id=? AND deleted_at IS NULL",id);
+ }
  @PutMapping("/accounts/{id}/permissions") @Transactional public void update(@PathVariable long id,@RequestBody PermissionInput f,Principal p){
   if(!List.of("SUPER_ADMIN","ADMIN","MEMBER","RESTRICTED").contains(f.role()==null?"":f.role()))throw error(400,"角色无效");
   if(f.permissions()==null||!AccountPermissions.CATALOG.keySet().containsAll(f.permissions().keySet())||f.permissions().values().stream().anyMatch(Objects::isNull))throw error(400,"权限配置无效");
-  var actor=actor(p);var supers=db.list("SELECT id FROM members WHERE role='SUPER_ADMIN' AND account_type='PERSONAL' FOR UPDATE");
-  var m=db.one("SELECT id,role,account_type FROM members WHERE id=? FOR UPDATE",id);if(m==null)throw error(404,"账号不存在");if(!"PERSONAL".equals(m.get("accountType")))throw error(400,"公用身份不能设置个人角色");
+  var actor=actor(p);var supers=db.list("SELECT id FROM members WHERE role='SUPER_ADMIN' AND account_type='PERSONAL' AND deleted_at IS NULL FOR UPDATE");
+  var m=db.one("SELECT id,role,account_type FROM members WHERE id=? AND deleted_at IS NULL FOR UPDATE",id);if(m==null)throw error(404,"账号不存在");if(!"PERSONAL".equals(m.get("accountType")))throw error(400,"公用身份不能设置个人角色");
   if(!"SUPER_ADMIN".equals(actor.get("role"))&&(List.of("ADMIN","SUPER_ADMIN").contains(m.get("role"))||List.of("ADMIN","SUPER_ADMIN").contains(f.role())))throw error(403,"只有超级管理员可以管理管理员角色");
   if("SUPER_ADMIN".equals(m.get("role"))&&!"SUPER_ADMIN".equals(f.role())&&supers.size()<2)throw error(400,"必须至少保留一位超级管理员");
   db.update("UPDATE members SET role=? WHERE id=?",f.role(),id);db.update("DELETE FROM member_permissions WHERE member_id=?",id);
   for(var e:f.permissions().entrySet())db.update("INSERT INTO member_permissions(member_id,permission_code,allowed) VALUES(?,?,?)",id,e.getKey(),e.getValue());
  }
  @GetMapping("/public-accounts") public List<Map<String,Object>> publicAccounts(){
-  var accounts=db.list("SELECT id,username,pen_name,account_type FROM members WHERE account_type='PUBLIC' ORDER BY id");
+  var accounts=db.list("SELECT id,username,pen_name,account_type FROM members WHERE account_type='PUBLIC' AND deleted_at IS NULL ORDER BY id");
   for(var account:accounts){long id=((Number)account.get("id")).longValue();account.put("memberIds",db.list("SELECT member_id FROM public_account_members WHERE public_member_id=? ORDER BY member_id",id).stream().map(row->((Number)row.get("memberId")).longValue()).toList());}
   return accounts;
  }
@@ -51,7 +66,7 @@ public class AdminSettingsController {
   if(f.memberIds()==null||f.memberIds().size()>500||f.memberIds().stream().anyMatch(v->v==null||v<1))throw error(400,"名单无效");
   var unique=new LinkedHashSet<>(f.memberIds());if(unique.size()!=f.memberIds().size())throw error(400,"名单存在重复账号");
   var account=db.one("SELECT id FROM members WHERE id=? AND account_type='PUBLIC' FOR UPDATE",id);if(account==null)throw error(404,"公用账号不存在");
-  for(long memberId:unique)if(db.count("SELECT COUNT(*) FROM members WHERE id=? AND account_type='PERSONAL'",memberId)==0)throw error(400,"名单只能包含个人账号");
+  for(long memberId:unique)if(db.count("SELECT COUNT(*) FROM members WHERE id=? AND account_type='PERSONAL' AND deleted_at IS NULL",memberId)==0)throw error(400,"名单只能包含个人账号");
   db.update("DELETE FROM public_account_members WHERE public_member_id=?",id);
   for(long memberId:unique)db.update("INSERT INTO public_account_members(public_member_id,member_id) VALUES(?,?)",id,memberId);
  }

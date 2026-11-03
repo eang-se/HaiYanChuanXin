@@ -26,7 +26,7 @@ class WorkBylineTest {
   prepare();when(db.count("SELECT COUNT(*) FROM works WHERE id=? AND author_id=?",55L,29L)).thenReturn(1L);
   when(db.one("SELECT byline,source_note,notes,genre,custom_genre,body_layout,pen_name_id,collection_id FROM works WHERE id=?",55L)).thenReturn(Map.of("byline","胡杰","sourceNote","","notes","原刊第2页"));
   var saved=new AtomicReference<Object[]>();
-  when(db.update(anyString(),any(Object[].class))).thenAnswer(i->{if(((String)i.getArgument(0)).startsWith("UPDATE works"))saved.set(i.getArguments());return 1;});
+  when(db.update(anyString(),any(Object[].class))).thenAnswer(i->{if(((String)i.getArgument(0)).startsWith("UPDATE works SET title="))saved.set(i.getArguments());return 1;});
   service.save(55L,"editor",new CommunityService.WorkInput("诗","诗歌","","<p>修订</p>","",List.of(),false));
   var args=saved.get();assertNotNull(args);assertEquals("胡杰",args[args.length-4]);assertEquals("原刊第2页",args[args.length-2]);
  }

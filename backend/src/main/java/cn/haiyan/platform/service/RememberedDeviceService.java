@@ -36,7 +36,7 @@ public class RememberedDeviceService {
  }
  private Map<String,Object> lookup(HttpServletRequest req,boolean lock){
   if(!allowed(req))return null;String[] value=cookie(req);if(value==null)return null;
-  var row=db.one("SELECT d.selector,d.token_hash,d.credential_hash,m.id,m.username,m.pen_name,m.qq_number,m.password_hash,m.account_type,m.role FROM remembered_devices d JOIN members m ON m.id=d.member_id WHERE d.selector=? AND d.expires_at>CURRENT_TIMESTAMP"+(lock?" FOR UPDATE":""),value[0]);
+  var row=db.one("SELECT d.selector,d.token_hash,d.credential_hash,m.id,m.username,m.pen_name,m.qq_number,m.password_hash,m.account_type,m.role FROM remembered_devices d JOIN members m ON m.id=d.member_id WHERE d.selector=? AND d.expires_at>CURRENT_TIMESTAMP AND m.deleted_at IS NULL"+(lock?" FOR UPDATE":""),value[0]);
   if(row==null||!"PERSONAL".equals(row.get("accountType")))return null;
   String supplied=AuthController.hash(value[1]),stored=String.valueOf(row.get("tokenHash"));
   if(!MessageDigest.isEqual(supplied.getBytes(StandardCharsets.US_ASCII),stored.getBytes(StandardCharsets.US_ASCII)))return null;

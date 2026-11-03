@@ -12,7 +12,7 @@ class IdentityServiceTest {
  private final CommunityStore db=mock(CommunityStore.class);
  private final IdentityService service=new IdentityService(db);
  private final MockHttpSession session=new MockHttpSession();
- private static final String TARGET="SELECT id,username,account_type FROM members WHERE id=? FOR UPDATE";
+ private static final String TARGET="SELECT id,username,account_type FROM members WHERE id=? AND deleted_at IS NULL FOR UPDATE";
  private static final String AUTH="SELECT member_id FROM public_account_members WHERE public_member_id=? AND member_id=? FOR UPDATE";
  private static final String LEASES="SELECT actor_id FROM public_account_sessions WHERE public_member_id=? FOR UPDATE";
  private void publicTarget(){when(db.one(TARGET,10L)).thenReturn(Map.of("id",10L,"username","public_name","accountType","PUBLIC"));}

@@ -28,8 +28,6 @@ window.addEventListener('scroll',updateSection,{passive:true})
 function locate(id:string) {
   const heading = headings.find(h => h.id === id)
   if (!heading) return
-  let parent = heading.parentElement
-  while (parent && parent !== content.value) { if (parent instanceof HTMLDetailsElement) parent.open = true; parent = parent.parentElement }
   if (toc.value) toc.value.open = false
   heading.scrollIntoView({block:'start',behavior:'auto'}); heading.focus({preventScroll:true}); active.value = id
 }

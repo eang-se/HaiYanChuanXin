@@ -33,42 +33,6 @@ export const CaptionImage = Node.create({
     }
   },
 })
-export const DisclosureTitle = Node.create({
-  name:'disclosureTitle',content:'inline*',marks:'bold italic underline strike code',defining:true,
-  parseHTML:() => [{tag:'summary'}],renderHTML:() => ['summary',{},0],
-  addKeyboardShortcuts() { return {Enter:() => {
-    const {$from} = this.editor.state.selection
-    if ($from.parent.type.name !== this.name) return false
-    return this.editor.commands.setTextSelection($from.after() + 2)
-  }} },
-})
-export const DisclosureBody = Node.create({
-  name:'disclosureBody',content:'block+',defining:true,
-  parseHTML:() => [{tag:'div[data-disclosure-body]'}],renderHTML:() => ['div',{'data-disclosure-body':''},0],
-})
-export const Disclosure = Node.create({
-  name:'disclosure',group:'block',content:'disclosureTitle disclosureBody',defining:true,isolating:true,
-  parseHTML:() => [{tag:'details'}],renderHTML:() => ['details',{},0],
-  addNodeView() { return () => {
-    const dom = document.createElement('details'); dom.open = true
-    // In editing mode both title and body remain reachable, including on touch screens.
-    dom.addEventListener('click',event => { if ((event.target as HTMLElement).closest('summary')) event.preventDefault() })
-    return {dom,contentDOM:dom,ignoreMutation:mutation => mutation.type==='attributes'&&mutation.attributeName==='open'}
-  } },
-})
-const SingleLevelDisclosure = Extension.create({
-  name:'singleLevelDisclosure',
-  addProseMirrorPlugins() { return [new Plugin({filterTransaction(transaction) {
-    if (!transaction.docChanged) return true
-    let valid = true
-    transaction.doc.descendants(node => {
-      if (node.type.name !== 'disclosure') return true
-      node.descendants(child => { if(child.type.name==='disclosure')valid=false })
-      return false
-    })
-    return valid
-  }})] },
-})
 function emptyLineDecorations(doc:ProseMirrorNode) {
   const decorations:Decoration[]=[]
   doc.descendants((node,pos)=>{
@@ -84,5 +48,5 @@ const EmptyLines=Extension.create({
   })]},
 })
 export function articleExtensions() {
-  return [StarterKit.configure({heading:{levels:[2,3]},link:false}),CaptionImage,Disclosure,DisclosureTitle,DisclosureBody,SingleLevelDisclosure,EmptyLines]
+  return [StarterKit.configure({heading:{levels:[2,3]},link:false}),CaptionImage,EmptyLines]
 }

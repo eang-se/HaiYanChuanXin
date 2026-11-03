@@ -1,6 +1,7 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {JSDOM} from 'jsdom'
+import {expandArticleDocument} from './document.ts'
 import {createSaveQueue} from './saveQueue.ts'
 import {defaultLayout,resolveLayout,matchingPreset} from './layout.ts'
 
@@ -27,9 +28,19 @@ test('new and legacy article HTML survives two editor round trips with line brea
     editor.destroy()
   }
 })
+test('structured document round trip retains legacy image, captions, disclosure and text',()=>{
+  const legacy=`<p>起始<br>第二行</p><img src="${src}" alt="旧图"><figure data-size="narrow"><img src="${src}" alt="河畔" width="1200" height="800"><figcaption>图片说明</figcaption></figure><details><summary>后记</summary><div data-disclosure-body><p>正文</p></div></details>`
+  const original=new Editor({extensions:articleExtensions(),content:sanitizeArticle(legacy)})
+  const html=original.getHTML(),document=original.getJSON()
+  const restored=new Editor({extensions:articleExtensions(),content:document})
+  assert.equal(restored.getHTML(),html);assert.equal(restored.getText(),original.getText())
+  assert.match(html,/<figcaption>图片说明<\/figcaption>/);assert.doesNotMatch(html,/<details>/);assert.match(html,/<br>/)
+  original.destroy();restored.destroy()
+})
+
 test('nested disclosures flatten without losing title/body and stay stable',()=>{
   const first=sanitizeArticle('<details><summary>外层</summary><div data-disclosure-body><p>开头</p><details><summary>内层</summary><div data-disclosure-body><p>结尾</p></div></details></div></details>')
-  assert.equal((first.match(/<details>/g)||[]).length,1);assert.match(first,/内层/);assert.match(first,/结尾/)
+  assert.equal((first.match(/<details>/g)||[]).length,0);assert.match(first,/内层/);assert.match(first,/结尾/)
   assert.equal(sanitizeArticle(first),first)
   const editor=new Editor({extensions:articleExtensions(),content:first})
   assert.match(editor.getText(),/内层/);assert.match(editor.getText(),/结尾/);editor.destroy()
@@ -65,4 +76,10 @@ test('genre layouts have bounded defaults and whitespace-only stanzas are marked
   assert.match(rendered,/　 /);assert.doesNotMatch(sanitizeArticle(rendered),/class=/)
   const editor=new Editor({extensions:articleExtensions(),content:html})
   assert.doesNotMatch(editor.getHTML(),/class=/);assert.equal(editor.getJSON().content?.length,4);editor.destroy()
+})
+
+test('legacy structured disclosure content expands without losing titles, body or inline formatting',()=>{
+  const old={type:'doc',content:[{type:'disclosure',content:[{type:'disclosureTitle',content:[{type:'text',text:'后记',marks:[{type:'bold'}]}]},{type:'disclosureBody',content:[{type:'paragraph',content:[{type:'text',text:'完整保留正文'}]}]}]}]}
+  const expanded=expandArticleDocument(old),editor=new Editor({extensions:articleExtensions(),content:expanded})
+  assert.equal(editor.getHTML(),'<p><strong>后记</strong></p><p>完整保留正文</p>');assert.doesNotMatch(JSON.stringify(expanded),/disclosure/);editor.destroy()
 })

@@ -17,10 +17,10 @@ public class IdentityService {
  public IdentityService(CommunityStore db){this.db=db;}
  private String hash(HttpSession session){return AuthController.hash(session.getId());}
  public String actor(HttpSession session,String fallback){Object value=session==null?null:session.getAttribute(ACTOR);return value instanceof String s?s:fallback;}
- public List<Map<String,Object>> available(long actorId){return db.list("SELECT m.id,m.username FROM members m WHERE m.id=? OR (m.account_type='PUBLIC' AND EXISTS(SELECT 1 FROM public_account_members pam WHERE pam.public_member_id=m.id AND pam.member_id=?)) ORDER BY m.account_type='PUBLIC',m.id",actorId,actorId);}
+ public List<Map<String,Object>> available(long actorId){return db.list("SELECT m.id,m.username FROM members m WHERE m.deleted_at IS NULL AND (m.id=? OR (m.account_type='PUBLIC' AND EXISTS(SELECT 1 FROM public_account_members pam WHERE pam.public_member_id=m.id AND pam.member_id=?))) ORDER BY m.account_type='PUBLIC',m.id",actorId,actorId);}
  @Transactional
  public String select(HttpSession session,long actorId,long targetId){
-  var target=db.one("SELECT id,username,account_type FROM members WHERE id=? FOR UPDATE",targetId);
+  var target=db.one("SELECT id,username,account_type FROM members WHERE id=? AND deleted_at IS NULL FOR UPDATE",targetId);
   if(target==null)throw error(404,"身份不存在");
   boolean personal=actorId==targetId && "PERSONAL".equals(target.get("accountType"));
   if(!personal&&(!"PUBLIC".equals(target.get("accountType"))||db.one("SELECT member_id FROM public_account_members WHERE public_member_id=? AND member_id=? FOR UPDATE",targetId,actorId)==null))throw error(403,"没有此公用身份的使用权限");
