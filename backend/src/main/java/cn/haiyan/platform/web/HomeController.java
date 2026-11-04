@@ -17,7 +17,7 @@ public class HomeController {
         return Map.of(
             "workCount",db.count("SELECT COUNT(*) FROM works WHERE status='PUBLISHED'"),
             "authorCount",db.count("SELECT COUNT(DISTINCT author_id) FROM works WHERE status='PUBLISHED'"),
-            "featured",service.decorate(db.list(WORK_SELECT+"WHERE w.status='PUBLISHED' AND EXISTS (SELECT 1 FROM work_tags wt JOIN tags t ON t.id=wt.tag_id WHERE wt.work_id=w.id AND t.name='海燕精选' AND t.kind='TOPIC') ORDER BY w.published_at DESC,w.id DESC LIMIT 3"),false));
+            "featured",service.decorate(db.list(WORK_LIST_SELECT+"WHERE w.status='PUBLISHED' AND EXISTS (SELECT 1 FROM work_tags wt JOIN tags t ON t.id=wt.tag_id WHERE wt.work_id=w.id AND t.name='海燕精选' AND t.kind='TOPIC') ORDER BY w.published_at DESC,w.id DESC LIMIT 3"),false));
     }
 
     @GetMapping("/api/public/works/random")
@@ -31,7 +31,7 @@ public class HomeController {
         // Keep a full set for small libraries; avoid the previous set when enough works exist.
         boolean omit=!ids.isEmpty()&&service.store().count("SELECT COUNT(*) FROM works WHERE status='PUBLISHED'")>=6;
         String where="WHERE w.status='PUBLISHED'"+(omit?" AND w.id NOT IN ("+String.join(",",Collections.nCopies(ids.size(),"?"))+")":"");
-        return service.decorate(service.store().list(WORK_SELECT+where+" ORDER BY RAND() LIMIT 3",omit?ids.toArray():new Object[0]),false);
+        return service.decorate(service.store().list(WORK_LIST_SELECT+where+" ORDER BY RAND() LIMIT 3",omit?ids.toArray():new Object[0]),false);
     }
 
     public record FeaturedInput(boolean active) {}

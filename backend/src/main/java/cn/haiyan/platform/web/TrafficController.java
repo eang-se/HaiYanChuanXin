@@ -13,6 +13,10 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 public class TrafficController {
     private final CommunityStore db;
+    // Traffic counts tolerate a short delay; avoid a full-table count per visitor heartbeat.
+    private volatile CachedTraffic cached;
+    private record CachedTraffic(Traffic value,long expiresAt) {}
+    private static final long COUNT_TTL_NANOS=Duration.ofSeconds(10).toNanos();
     public TrafficController(CommunityStore db) { this.db=db; }
     public record Traffic(long online,long visitors) {}
 
@@ -27,7 +31,17 @@ public class TrafficController {
         }
         response.setHeader(HttpHeaders.CACHE_CONTROL,"no-store");
         db.update("INSERT INTO site_visitors(visitor_hash) VALUES(?) ON DUPLICATE KEY UPDATE last_seen=CURRENT_TIMESTAMP",AuthController.hash(visitor));
-        var counts=db.one("SELECT COUNT(*) AS visitors,COALESCE(SUM(last_seen>=DATE_SUB(CURRENT_TIMESTAMP,INTERVAL 90 SECOND)),0) AS online FROM site_visitors");
-        return new Traffic(((Number)counts.get("online")).longValue(),((Number)counts.get("visitors")).longValue());
+        return counts();
+    }
+    private Traffic counts(){
+        long now=System.nanoTime();CachedTraffic current=cached;
+        if(current!=null&&now-current.expiresAt()<0)return current.value();
+        synchronized(this){
+            now=System.nanoTime();current=cached;
+            if(current!=null&&now-current.expiresAt()<0)return current.value();
+            var counts=db.one("SELECT COUNT(*) AS visitors,COALESCE(SUM(last_seen>=DATE_SUB(CURRENT_TIMESTAMP,INTERVAL 90 SECOND)),0) AS online FROM site_visitors");
+            var result=new Traffic(((Number)counts.get("online")).longValue(),((Number)counts.get("visitors")).longValue());
+            cached=new CachedTraffic(result,System.nanoTime()+COUNT_TTL_NANOS);return result;
+        }
     }
 }

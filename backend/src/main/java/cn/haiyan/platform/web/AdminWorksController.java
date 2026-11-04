@@ -30,7 +30,7 @@ public class AdminWorksController {
         int currentPage=(int)Math.min(page,Math.max(1,(total+pageSize-1)/pageSize));
         String order=switch(sort){case "oldest"->"w.id ASC";case "newest"->"w.id DESC";default->"w.updated_at DESC,w.id DESC";};
         args.add(pageSize);args.add((currentPage-1)*pageSize);
-        var items=service.decorate(db.list(WORK_SELECT+where+" ORDER BY "+order+" LIMIT ? OFFSET ?",args.toArray()),false);
+        var items=service.decorate(db.list(WORK_LIST_SELECT+where+" ORDER BY "+order+" LIMIT ? OFFSET ?",args.toArray()),false);
         var summary=db.one("SELECT COUNT(*) AS total,COALESCE(SUM(w.status='PUBLISHED'),0) AS published,COALESCE(SUM(w.status='WITHDRAWN'),0) AS withdrawn,COALESCE(SUM("+FEATURED+"),0) AS featured FROM works w WHERE w.status<>'DRAFT'");
         return Map.of("items",items,"total",total,"page",currentPage,"pageSize",pageSize,"summary",summary);
     }

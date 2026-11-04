@@ -75,6 +75,7 @@ class HomeControllerTest {
         mvc.perform(post("/api/public/traffic").cookie(cookie).with(csrf())).andExpect(status().isOk())
             .andExpect(header().doesNotExist("Set-Cookie"));
         verify(store,times(2)).update("INSERT INTO site_visitors(visitor_hash) VALUES(?) ON DUPLICATE KEY UPDATE last_seen=CURRENT_TIMESTAMP",AuthController.hash(cookie.getValue()));
+        verify(store,times(1)).one(startsWith("SELECT COUNT(*) AS visitors"));
     }
     @Test void randomEndpointValidatesInputAndOmitsPreviousBatch() throws Exception {
         when(service.store()).thenReturn(store);

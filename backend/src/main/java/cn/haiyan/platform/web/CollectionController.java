@@ -20,7 +20,7 @@ public class CollectionController {
   var c=s.store().one(SELECT+"WHERE c.id=?",id);if(c==null)throw error(404,"合集不存在");
   boolean owner=p!=null&&((Number)c.get("authorId")).longValue()==s.memberId(p.getName());
   if(!Boolean.TRUE.equals(c.get("published"))&&!owner)throw error(404,"合集尚未公开");
-  c.put("works",s.decorate(s.store().list(WORK_SELECT+"WHERE w.collection_id=?"+(owner?"":" AND w.status='PUBLISHED'")+" ORDER BY w.collection_position,w.id",id),false,owner?s.memberId(p.getName()):null));return c;
+  c.put("works",s.decorate(s.store().list(WORK_LIST_SELECT+"WHERE w.collection_id=?"+(owner?"":" AND w.status='PUBLISHED'")+" ORDER BY w.collection_position,w.id",id),false,owner?s.memberId(p.getName()):null));return c;
  }
  @GetMapping("/api/public/works/{id}/collections") public List<Map<String,Object>> memberships(@PathVariable long id){s.publicWork(id);return s.store().list(SELECT+"WHERE c.published=TRUE AND EXISTS(SELECT 1 FROM works w WHERE w.collection_id=c.id AND w.id=?)",id);}
  public record Input(String title,String description,String kind,boolean published,List<Long> workIds){}

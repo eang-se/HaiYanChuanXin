@@ -17,15 +17,15 @@ provide(openDraftKey,openDraft)
 function startDraft(value:NewDraftSetup){setNewDraftSetup(value);newDraftOpen.value=false;void router.push({path:'/write',query:draftTag.value?{tag:draftTag.value}:undefined})}
 const pageRefreshedAt=new Date()
 const traffic=ref<{online:number;visitors:number}|null>(null),trafficUnavailable=ref(false)
-let trafficTimer:ReturnType<typeof setInterval>|undefined,trafficBusy=false,disposed=false
-async function heartbeat(){if(disposed||document.visibilityState==='hidden'||trafficBusy)return;trafficBusy=true
+let trafficTimer:ReturnType<typeof setInterval>|undefined,trafficBusy=false,disposed=false,lastHeartbeat=0
+async function heartbeat(){if(disposed||document.visibilityState==='hidden'||trafficBusy||Date.now()-lastHeartbeat<15000)return;trafficBusy=true;lastHeartbeat=Date.now()
 try{const {data}=await api.post('/public/traffic');if(!disposed){traffic.value=data;trafficUnavailable.value=false}}catch{if(!disposed)trafficUnavailable.value=true}finally{trafficBusy=false}}
 function resumeTraffic(){if(document.visibilityState==='visible')void heartbeat()}
 const pageRefreshedText=new Intl.DateTimeFormat('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(pageRefreshedAt)
 watch(()=>route.fullPath,(_next,previous)=>{menu.value=false;if(previous?.startsWith('/login')&&route.path!=='/write')takeNewDraftSetup()})
 watch(()=>[user.value?.id,user.value?.profileCompleted,user.value?.profilePromptSeen],()=>{profileReminder.value=!!user.value&&!user.value.profileCompleted&&!user.value.profilePromptSeen},{immediate:true})
 onMounted(async()=>{try{siteName.value=(await api.get('/public/site')).data.name}catch{}})
-onMounted(()=>{void heartbeat();trafficTimer=setInterval(()=>void heartbeat(),30000);document.addEventListener('visibilitychange',resumeTraffic)})
+onMounted(()=>{void heartbeat();trafficTimer=setInterval(()=>void heartbeat(),45000);document.addEventListener('visibilitychange',resumeTraffic)})
 onBeforeUnmount(()=>{disposed=true;clearInterval(trafficTimer);document.removeEventListener('visibilitychange',resumeTraffic)})
 async function skipReminder(){reminderBusy.value=true;reminderError.value='';try{await api.post('/member/profile/reminder-dismiss');await refreshAuth();profileReminder.value=false}catch(e){reminderError.value=message(e)}finally{reminderBusy.value=false}}
 async function logout(){try{await api.post('/auth/logout');await refreshAuth();router.push('/');notify('已退出登录')}catch(e){notify(message(e))}}
