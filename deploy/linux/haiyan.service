@@ -10,7 +10,7 @@ Type=exec
 User=haiyan
 Group=haiyan
 WorkingDirectory=/var/lib/haiyan
-ExecStart=/usr/bin/java -Xms128m -Xmx512m -XX:ActiveProcessorCount=2 -Djava.awt.headless=true -jar /opt/haiyan/current/app.jar --spring.profiles.active=production --spring.config.additional-location=file:/etc/haiyan/application-production.properties
+ExecStart=/usr/bin/java -Xms128m -Xmx384m -XX:ActiveProcessorCount=2 -Djava.awt.headless=true -jar /opt/haiyan/current/app.jar --spring.profiles.active=production --spring.config.additional-location=file:/etc/haiyan/application-production.properties
 Restart=on-failure
 RestartSec=10
 SuccessExitStatus=143
@@ -21,8 +21,8 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=/var/lib/haiyan
-MemoryHigh=850M
-MemoryMax=1G
+MemoryHigh=750M
+MemoryMax=900M
 StandardOutput=journal
 StandardError=journal
 
