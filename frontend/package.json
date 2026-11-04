@@ -8,7 +8,7 @@
     "prebuild": "node scripts/optimize-brand.mjs",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "node --experimental-strip-types --test src/sharing.test.ts src/article/article.test.ts scripts/convert-article-documents.test.mjs",
+    "test": "node --experimental-strip-types --test src/sharing.test.ts src/shareSelection.test.ts src/article/article.test.ts scripts/convert-article-documents.test.mjs",
     "test:e2e": "playwright test"
   },
   "dependencies": {

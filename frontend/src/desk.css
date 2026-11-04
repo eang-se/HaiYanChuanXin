@@ -1,0 +1,26 @@
+.desk-avatar{display:none!important}
+@media(max-width:760px){
+ .desk-page{padding-top:16px;padding-bottom:26px}
+ .desk-page .desk-heading{display:flex;align-items:center;gap:11px;padding:19px;background:#e8f0e5;border:1px solid #dce9db;border-radius:17px}
+ .desk-page .desk-avatar{display:inline-grid!important;flex:none;border:2px solid #fff;background:#d4e4d3;color:#426b4b}
+ .desk-page .desk-heading>div{flex:1;min-width:0}.desk-page .desk-heading .eyebrow{margin:0 0 3px;color:#819886;font-size:9px;letter-spacing:1px}
+ .desk-page .desk-heading .page-title{font-size:21px;line-height:1.4;letter-spacing:.4px;margin:0;overflow-wrap:anywhere}.desk-page .desk-heading .page-description{font-size:11px;line-height:1.5;margin:3px 0 0;color:#788e7c}
+ .desk-page .desk-heading>.button{min-height:38px;flex:none;margin:0;padding:8px 10px;border-radius:10px;font-size:11px;gap:5px}.desk-page .desk-heading>.button svg{width:15px;height:15px}
+ .desk-page .desk-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;margin:14px 0;padding:15px 0;border:1px solid #e4eae0;border-radius:15px;background:#fff}
+ .desk-page .desk-stats>div{display:flex;align-items:center;justify-content:center;gap:4px;padding:0 5px}.desk-page .desk-stats>div+div{border-left:1px solid #edf1ea}.desk-page .desk-stats strong{font-size:23px;line-height:1.1}.desk-page .desk-stats span{font-size:11px;color:#849486}
+ .desk-page .desk-collection-links{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;overflow:visible;margin:0 0 20px;padding:0;border:0;white-space:normal}
+ .desk-page .desk-shortcut{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:6px;min-width:0;min-height:70px;padding:8px 2px;border:1px solid #e5ebe2;border-radius:13px;background:#fff;color:#597760;font-size:11px;line-height:1.35;text-align:center}
+ .desk-page .desk-shortcut svg{color:#5f8866}.desk-page .desk-shortcut span{white-space:nowrap}
+ .desk-page .desk-tabs{display:flex;flex-wrap:nowrap;gap:20px;overflow-x:auto;white-space:nowrap;margin:0 0 13px;padding:0;border-bottom:1px solid #dfe8dc;scrollbar-width:none}.desk-page .desk-tabs::-webkit-scrollbar{display:none}
+ .desk-page .desk-tabs button{flex:none;min-height:42px;margin:0 0 -1px;padding:8px 0;border:0;border-bottom:2px solid transparent;border-radius:0;background:none;color:#849385;font-size:12px}.desk-page .desk-tabs button.selected{border-color:#285b40;color:#285b40;font-weight:600}
+ .desk-page .works-rows{gap:10px}.desk-page .desk-work-item{overflow:hidden;border:1px solid #e2eae0;border-radius:14px;background:#fff}
+ .desk-page .desk-work-item .work-row{gap:10px;align-items:flex-start;padding:15px 16px 11px;border:0;border-radius:0}.desk-page .desk-work-item .row-genre{min-width:0;padding:3px 0 0}.desk-page .desk-work-item .genre-label{font-size:10px;white-space:nowrap}
+ .desk-page .row-content .card-title{display:block;font-size:18px;line-height:1.4;letter-spacing:.2px;overflow-wrap:anywhere}.desk-page .row-excerpt{margin:6px 0 7px;font-size:12px;line-height:1.65;color:#778579;-webkit-line-clamp:2}.desk-page .row-excerpt:empty,.desk-page .row-tag-list:empty{display:none}
+ .desk-page .row-tag-list{margin:5px 0;gap:6px;font-size:10px}.desk-page .row-meta{gap:5px 10px;flex-wrap:wrap;font-size:10px}.desk-page .row-cover{width:64px;height:70px;margin:0;border-radius:8px}.desk-page .work-collection-property{font-size:10px;margin:6px 0}
+ .desk-page .desk-work-controls{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 15px;border:0;border-top:1px solid #edf1eb;background:#fbfcfa}.desk-page .desk-work-controls .row-actions{width:auto;gap:16px;font-size:12px}.desk-page .row-actions a,.desk-page .row-actions button{min-height:34px;color:#426f52}.desk-page .row-actions .draft-delete{color:#a45e4b}
+ .desk-page .status-badge{font-size:10px;border-radius:6px}.desk-page .empty-state{min-height:180px;border-radius:14px;background:#fff}.desk-page .profile-form{padding:18px;border-radius:14px}
+ .desk-page>.works-rows>.work-row{padding:15px;border-radius:14px;background:#fff}.desk-page>.works-rows>.work-row .row-genre{min-width:0}.desk-page>.works-rows>.work-row .row-content .card-title{font-size:18px}
+}
+@media(max-width:360px){.desk-page .desk-heading{padding:15px;gap:8px}.desk-page .desk-avatar{width:40px!important;height:40px!important}.desk-page .desk-heading .page-title{font-size:19px}.desk-page .desk-heading>.button{padding:7px;font-size:10px}.desk-page .desk-shortcut{font-size:10px}.desk-page .desk-tabs{gap:16px}}
+@media(max-width:760px){.desk-page .genre-tabs.desk-tabs{flex-wrap:nowrap}}
+@media(max-width:760px){.desk-page .desk-collection-links.desk-collection-links{gap:6px;margin:12px 0 16px}}

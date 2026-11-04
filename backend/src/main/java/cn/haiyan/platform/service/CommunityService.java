@@ -16,27 +16,51 @@ public class CommunityService {
     public CommunityStore store() { return db; }
     public static ResponseStatusException error(int code,String message) { return new ResponseStatusException(HttpStatus.valueOf(code),message); }
     public Map<String,Object> member(String username) {
-        var m=db.one("SELECT id,username,pen_name,bio,role,account_type,signature,qq_number,profile_completed,profile_prompt_seen,created_at FROM members WHERE username=? AND deleted_at IS NULL",username);
-        if(m==null) throw error(401,"请先登录");m.put("avatarUrl",avatarUrl(m.get("id"),m.get("qqNumber"),m.get("accountType"),m.get("username")));m.put("permissions",permissions.effective(((Number)m.get("id")).longValue(),(String)m.get("role"))); return m;
+        var m=db.one("SELECT id,username,pen_name,bio,role,account_type,signature,qq_number,avatar_url,profile_completed,profile_prompt_seen,created_at FROM members WHERE username=? AND deleted_at IS NULL",username);
+        if(m==null) throw error(401,"请先登录");m.put("avatarUrl",avatarUrl(m.get("id"),m.get("qqNumber"),m.get("accountType"),m.get("username"),m.get("avatarUrl")));m.put("permissions",permissions.effective(((Number)m.get("id")).longValue(),(String)m.get("role"))); return m;
     }
     public long memberId(String username) { return ((Number)member(username).get("id")).longValue(); }
     public static String avatarUrl(Object id,Object qq) { return qq instanceof String q && q.matches("[1-9][0-9]{4,11}") ? "/api/public/avatars/"+id : ""; }
-    public static String avatarUrl(Object id,Object qq,Object type,Object username) { if("PUBLIC".equals(type))return switch(String.valueOf(username)) {case "haiyan_official" -> "/brand/haiyan-seal.webp";case "haiyan_editor" -> "/brand/haiyan-bird.svg";case "haiyan_tech" -> "/brand/tech-department.webp";case "haiyan_activity" -> "/brand/activity-account.webp";default -> "";};return avatarUrl(id,qq); }
-    public static final String AVATAR_SQL="CASE WHEN m.account_type='PUBLIC' THEN CASE m.username WHEN 'haiyan_official' THEN '/brand/haiyan-seal.webp' WHEN 'haiyan_editor' THEN '/brand/haiyan-bird.svg' WHEN 'haiyan_tech' THEN '/brand/tech-department.webp' WHEN 'haiyan_activity' THEN '/brand/activity-account.webp' ELSE '' END WHEN m.qq_number REGEXP '^[1-9][0-9]{4,11}$' THEN CONCAT('/api/public/avatars/',m.id) ELSE '' END";
+    public static String avatarUrl(Object id,Object qq,Object type,Object username) { return avatarUrl(id,qq,type,username,null); }
+    public static String avatarUrl(Object id,Object qq,Object type,Object username,Object custom) { if("PUBLIC".equals(type)){if(custom instanceof String url&&url.matches("/api/public/account-avatars/[0-9a-f-]{36}"))return url;return switch(String.valueOf(username)) {case "haiyan_official" -> "/brand/haiyan-seal.webp";case "haiyan_editor" -> "/brand/editorial-account.jpg";case "haiyan_tech" -> "/brand/tech-department.webp";case "haiyan_activity" -> "/brand/activity-account.webp";default -> "";};}return avatarUrl(id,qq); }
+    public static final String AVATAR_SQL="CASE WHEN m.account_type='PUBLIC' THEN CASE WHEN m.avatar_url REGEXP '^/api/public/account-avatars/[0-9a-f-]{36}$' THEN m.avatar_url ELSE CASE m.username WHEN 'haiyan_official' THEN '/brand/haiyan-seal.webp' WHEN 'haiyan_editor' THEN '/brand/editorial-account.jpg' WHEN 'haiyan_tech' THEN '/brand/tech-department.webp' WHEN 'haiyan_activity' THEN '/brand/activity-account.webp' ELSE '' END END WHEN m.qq_number REGEXP '^[1-9][0-9]{4,11}$' THEN CONCAT('/api/public/avatars/',m.id) ELSE '' END";
     public static final String WORK_SELECT="SELECT w.*,COALESCE(pn.name,NULLIF(w.byline,''),m.pen_name) AS display_byline,m.pen_name AS author_name,m.account_type AS author_account_type,"+AVATAR_SQL+" AS author_avatar,(SELECT COUNT(*) FROM works pw WHERE pw.pen_name_id=w.pen_name_id AND pw.status='PUBLISHED') AS pen_name_work_count,(SELECT COUNT(*) FROM reactions r WHERE r.work_id=w.id AND r.kind='LIKE') AS likes,(SELECT COUNT(*) FROM comments c WHERE c.work_id=w.id AND c.visible=TRUE) AS comment_count FROM works w JOIN members m ON m.id=w.author_id LEFT JOIN pen_names pn ON pn.id=w.pen_name_id ";
     public List<Map<String,Object>> decorate(List<Map<String,Object>> rows,boolean detail) {
         return decorate(rows,detail,null);
     }
     public List<Map<String,Object>> decorate(List<Map<String,Object>> rows,boolean detail,Long viewer) {
+        if(rows.isEmpty())return rows;
+        // Fetch related data in batches rather than performing two queries per work.
+        Map<Long,List<Map<String,Object>>> tagsByWork=new HashMap<>();
+        Map<Long,Map<String,Object>> collectionsById=new HashMap<>();
+        List<Long> workIds=rows.stream().map(w->((Number)w.get("id")).longValue()).distinct().toList();
+        List<Long> collectionIds=rows.stream().map(w->w.get("collectionId")).filter(Number.class::isInstance).map(x->((Number)x).longValue()).distinct().toList();
+        for(int start=0;start<workIds.size();start+=200){
+            var ids=workIds.subList(start,Math.min(start+200,workIds.size()));
+            String placeholders=String.join(",",Collections.nCopies(ids.size(),"?"));
+            for(var tag:db.list("SELECT wt.work_id AS decorated_work_id,t.* FROM tags t JOIN work_tags wt ON wt.tag_id=t.id WHERE wt.work_id IN ("+placeholders+") AND t.kind='TOPIC'",ids.toArray())){
+                long workId=((Number)tag.remove("decoratedWorkId")).longValue();
+                tagsByWork.computeIfAbsent(workId,k->new ArrayList<>()).add(tag);
+            }
+        }
+        for(int start=0;start<collectionIds.size();start+=200){
+            var ids=collectionIds.subList(start,Math.min(start+200,collectionIds.size()));
+            String placeholders=String.join(",",Collections.nCopies(ids.size(),"?"));
+            for(var collection:db.list("SELECT id,title,kind,published FROM collections WHERE id IN ("+placeholders+")",ids.toArray()))collectionsById.put(((Number)collection.get("id")).longValue(),collection);
+        }
         for(var w:rows) {
             w.remove("editRevision");
             w.put("layout",ArticleLayout.decode(w.remove("bodyLayout"),String.valueOf(w.get("genre"))));
             boolean own=viewer!=null&&((Number)w.get("authorId")).longValue()==viewer;
-            w.put("tags",db.list("SELECT t.* FROM tags t JOIN work_tags wt ON wt.tag_id=t.id WHERE wt.work_id=? AND t.kind='TOPIC'",w.get("id")));
-            var collection=db.one("SELECT id,title,kind,published FROM collections WHERE id=?"+(own?"":" AND published=TRUE"),w.get("collectionId"));
+            w.put("tags",tagsByWork.getOrDefault(((Number)w.get("id")).longValue(),List.of()));
+            Object collectionId=w.get("collectionId");
+            var collection=collectionId instanceof Number n?collectionsById.get(n.longValue()):null;
+            Object published=collection==null?null:collection.get("published");
+            if(!own && !(Boolean.TRUE.equals(published)||(published instanceof Number n&&n.intValue()!=0)))collection=null;
             w.put("collection",collection);
             if(collection==null&&!own){w.put("collectionId",null);w.put("collectionPosition",null);}
-            w.put("wordCount",String.valueOf(w.get("plainText")).replaceAll("\\s","").codePointCount(0,String.valueOf(w.get("plainText")).replaceAll("\\s","").length()));
+            String plain=String.valueOf(w.get("plainText")).replaceAll("\\s","");
+            w.put("wordCount",plain.codePointCount(0,plain.length()));
             w.remove("plainText"); if(!detail)w.remove("body");
         } return rows;
     }
@@ -44,11 +68,12 @@ public class CommunityService {
         var rows=db.list(WORK_SELECT+"WHERE w.id=?",id);
         if(rows.isEmpty())throw error(404,"作品不存在");
         var w=rows.getFirst();
+        Long viewer=username==null?null:memberId(username);
         boolean published="PUBLISHED".equals(w.get("status"));
-        if(!published && (username==null || !Objects.equals(w.get("authorId"),member(username).get("id"))))throw error(404,"作品尚未公开");
-        decorate(rows,true,username==null?null:memberId(username));
-        w.put("liked",username!=null && db.count("SELECT COUNT(*) FROM reactions WHERE member_id=? AND work_id=? AND kind='LIKE'",memberId(username),id)>0);
-        w.put("bookmarked",username!=null && db.count("SELECT COUNT(*) FROM reactions WHERE member_id=? AND work_id=? AND kind='BOOKMARK'",memberId(username),id)>0);
+        if(!published && (viewer==null || !Objects.equals(((Number)w.get("authorId")).longValue(),viewer)))throw error(404,"作品尚未公开");
+        decorate(rows,true,viewer);
+        w.put("liked",viewer!=null && db.count("SELECT COUNT(*) FROM reactions WHERE member_id=? AND work_id=? AND kind='LIKE'",viewer,id)>0);
+        w.put("bookmarked",viewer!=null && db.count("SELECT COUNT(*) FROM reactions WHERE member_id=? AND work_id=? AND kind='BOOKMARK'",viewer,id)>0);
         return w;
     }
     public void publicWork(long id) { if(db.count("SELECT COUNT(*) FROM works WHERE id=? AND status='PUBLISHED'",id)==0)throw error(404,"作品尚未公开"); }
@@ -113,7 +138,7 @@ public class CommunityService {
         if(!Set.of("诗歌","散文","小说","随笔","公告","其他").contains(genre)){if(customGenre.isBlank())customGenre=genre;genre="其他";}
         if(!genre.equals("其他"))customGenre="";
         if("公告".equals(customGenre))throw error(400,"公告请使用专用文章类型");
-        if("公告".equals(genre)&&!ManagementAccess.canReview())throw error(403,"公告仅限公用身份或个人管理员发布");
+        if("公告".equals(genre))ManagementAccess.requireAdmin();
         ArticleLayout layout=input.layout()!=null?input.layout().validated():existing!=null&&Objects.equals(existing.get("genre"),genre)?ArticleLayout.decode(existing.get("bodyLayout"),genre):ArticleLayout.defaults(genre);
         String excerpt=bounded(input.excerpt(),240,"摘要");
         String raw=Objects.requireNonNullElse(input.body(),"");

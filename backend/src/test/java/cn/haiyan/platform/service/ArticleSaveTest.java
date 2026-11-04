@@ -9,12 +9,14 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class ArticleSaveTest {
-    @Test void announcementIsADistinctTypeReservedForPublicStaffAndPersonalAdministrators(){
+    @Test void announcementIsReservedForPersonalAdministrators(){
         prepare();var data=new CommunityService.WorkInput("公告","公告","","<p>社团公告内容</p>","",List.of(),List.of(),true,"佚名","","");
         var context=org.springframework.security.core.context.SecurityContextHolder.getContext();
         try{
             assertThrows(ResponseStatusException.class,()->service.save(55L,"editor",data));
-            for(String role:List.of("ADMIN","PUBLIC_STAFF")){
+            context.setAuthentication(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("operator",null,List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_PUBLIC_STAFF"))));
+            assertEquals(403,assertThrows(ResponseStatusException.class,()->service.save(55L,"editor",data)).getStatusCode().value());
+            for(String role:List.of("ADMIN","SUPER_ADMIN")){
                 context.setAuthentication(new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("operator",null,List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_"+role))));
                 assertDoesNotThrow(()->service.save(55L,"editor",data));
             }
@@ -42,6 +44,18 @@ class ArticleSaveTest {
     @Test void foldedTextCannotBypassPublicationReviewAndBodyLimit(){
         prepare();assertThrows(ResponseStatusException.class,()->service.save(55L,"editor",input("<details><summary>附录</summary><div data-disclosure-body><p>"+"博彩、博彩、博彩"+"</p></div></details>",true)));
         assertThrows(ResponseStatusException.class,()->service.save(55L,"editor",input("字".repeat(200001),false)));
+    }
+    @Test void flaggedPublicationIsBlockedBeforeWritesWhileDraftRemainsSavable(){
+        prepare();var warning=assertThrows(ArticleModerationWarning.class,()->service.save(55L,"editor",input("<p>博彩、博彩、博彩</p>",true)));
+        assertEquals(422,warning.getStatusCode().value());
+        verify(db,never()).update(startsWith("UPDATE works"),any(Object[].class));
+        assertDoesNotThrow(()->service.save(55L,"editor",input("<p>博彩、博彩、博彩</p>",false)));
+    }
+    @Test void oneHighDensityInsultBlocksPublicationButNotDraftSaving(){
+        prepare();var warning=assertThrows(ArticleModerationWarning.class,()->service.save(55L,"editor",input("<p>操你妈</p>",true)));
+        assertEquals(422,warning.getStatusCode().value());
+        verify(db,never()).update(startsWith("UPDATE works"),any(Object[].class));
+        assertDoesNotThrow(()->service.save(55L,"editor",input("<p>操你妈</p>",false)));
     }
     @Test void totalImageLimitAppliesToDraftsAndPublishingBeforeAnyWrites(){
         prepare();when(db.count("SELECT COUNT(*) FROM media_files WHERE id=? AND owner_id=?",mediaId,29L)).thenReturn(1L);

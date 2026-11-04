@@ -37,6 +37,37 @@ async function fixture(page:Page){
   return state
 }
 async function enterName(page:Page,name:string){await page.getByRole('button',{name:'添加临时署名'}).click();await page.getByRole('dialog',{name:'编辑临时署名'}).getByRole('textbox',{name:'临时署名',exact:true}).fill(name);await page.getByRole('button',{name:'使用此署名'}).click()}
+test('mobile layouts follow system theme changes despite old saved preferences',async({page})=>{
+  await fixture(page);await page.setViewportSize({width:390,height:844});await page.emulateMedia({colorScheme:'light'});
+  await page.addInitScript(()=>{localStorage.setItem('haiyan.feedLayout','cards');localStorage.setItem('haiyan.mobileTheme','light')});
+  await page.goto('/#/author/29');await expect(page.locator('.author-page .work-row')).toHaveCount(1);await expect(page.locator('.author-page .view-switch')).toHaveCount(0);
+  await expect(page.locator('.author-collections')).toBeVisible();await page.screenshot({path:'../output/signature-management/author-mobile.png'});await page.goto('/#/work/42');await expect(page.locator('.reading-author-avatar')).toBeVisible();
+  await expect(page.locator('.mobile-theme-toggle')).toHaveCount(0);await page.emulateMedia({colorScheme:'dark'});
+  expect(await page.locator('.reading-container').evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgb(32, 46, 37)');
+  await page.screenshot({path:'../output/signature-management/reading-dark-mobile.png'});
+  await page.goto('/#/account');await page.getByRole('button',{name:'管理绑定笔名',exact:true}).click();
+  expect(await page.getByRole('dialog',{name:'管理绑定笔名'}).evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgb(32, 46, 37)');
+  await page.getByRole('button',{name:'关闭管理弹窗'}).click();await page.goto('/#/write/42');await expect(page.locator('.mobile-theme-toggle')).toHaveCount(0);
+  expect(await page.locator('.editor-paper').evaluate(el=>getComputedStyle(el).backgroundColor)).toBe('rgb(32, 46, 37)');
+  await page.emulateMedia({colorScheme:'light'});await expect(page.locator('.editor-paper')).not.toHaveCSS('background-color','rgb(32, 46, 37)');
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+})
+test('mobile theme follows system initially and the author retains desktop layout preferences',async({page})=>{
+  await fixture(page);await page.emulateMedia({colorScheme:'dark'});await page.setViewportSize({width:320,height:568});
+  await page.addInitScript(()=>localStorage.setItem('haiyan.feedLayout','cards'));await page.goto('/#/author/29');
+  await expect(page.locator('.author-page .author-heading')).toHaveCSS('background-color','rgb(32, 46, 37)');await expect(page.locator('.author-page .work-row')).toHaveCount(1);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.setViewportSize({width:1000,height:800});await expect(page.locator('.author-page .work-card')).toHaveCount(1);await expect(page.locator('.author-page .view-switch')).toBeVisible();
+})
+test('mobile management dialogs stay readable and fit a short narrow screen',async({page})=>{
+  await fixture(page);await page.setViewportSize({width:320,height:568});await page.goto('/#/account');
+  await page.getByRole('button',{name:'管理绑定笔名',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'管理绑定笔名'});await expect(dialog).toBeVisible();
+  const bounds=await dialog.boundingBox();expect(bounds!.width).toBeLessThanOrEqual(320);expect(bounds!.height).toBeLessThanOrEqual(568);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  expect(await dialog.getByRole('button',{name:'关闭管理弹窗'}).evaluate(el=>el.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+  await dialog.getByRole('button',{name:'关闭管理弹窗'}).click();await expect(dialog).toHaveCount(0);
+})
 test.beforeAll(async()=>{await mkdir('../output/signature-management',{recursive:true})})
 
 test('the writing desk opens bound pen name management directly',async({page})=>{
@@ -142,4 +173,22 @@ test('desk management dialogs fit mobile and discard protection retains unsaved 
   expect(await popup.evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);await page.screenshot({path:'../output/signature-management/collections-modal-mobile.png'})
   page.once('dialog',dialog=>dialog.accept());await page.keyboard.press('Escape');await expect(popup).toHaveCount(0);await expect(page).toHaveURL(/#\/account$/)
   await page.getByRole('button',{name:'管理绑定笔名',exact:true}).click();await expect(page.getByRole('dialog',{name:'管理绑定笔名'})).toBeVisible();await page.screenshot({path:'../output/signature-management/pens-modal-mobile.png'})
+})
+
+test('mobile desk uses rows regardless of stored preference and keeps actions available',async({page})=>{
+  const state=await fixture(page);await page.route('**/api/member/bookmarks',route=>route.fulfill({json:[state.work]}));await page.addInitScript(()=>localStorage.setItem('haiyan.feedLayout','cards'))
+  await page.setViewportSize({width:320,height:844});await page.goto('/#/account');await expect(page.locator('.desk-work-item .work-row')).toHaveCount(1);await expect(page.locator('.desk-page .view-switch')).toHaveCount(0)
+  await expect(page.getByRole('button',{name:'管理绑定笔名'})).toBeVisible();await expect(page.getByRole('button',{name:'管理合集'})).toBeVisible();await expect(page.getByRole('link',{name:'编辑',exact:true})).toHaveAttribute('href','#/write/42')
+  await page.getByRole('button',{name:'草稿箱',exact:true}).click();await expect(page.locator('.desk-work-item .work-row')).toHaveCount(1)
+  await page.getByRole('button',{name:'已发布',exact:true}).click();await expect(page.locator('.desk-page .empty-state')).toContainText('暂无稿件')
+  await page.getByRole('button',{name:'我的收藏',exact:true}).click();await expect(page.locator('.desk-page .works-rows .work-row')).toHaveCount(1)
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+  await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'全部稿件',exact:true}).click();await page.screenshot({path:'../output/signature-management/mobile-desk.png',fullPage:true})
+  await page.setViewportSize({width:1100,height:844});await expect(page.locator('.desk-page .view-switch')).toBeVisible();await expect(page.locator('.desk-work-item .work-card')).toHaveCount(1)
+})
+
+test('public identity desk retains collection tools without personal profile entries',async({page})=>{
+  const state=await fixture(page);state.accountType='PUBLIC';await page.setViewportSize({width:320,height:844});await page.goto('/#/account')
+  await expect(page.getByRole('button',{name:'管理合集'})).toBeVisible();await expect(page.getByRole('link',{name:'个人中心'})).toHaveCount(0);await expect(page.getByRole('button',{name:'管理绑定笔名'})).toHaveCount(0)
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
 })

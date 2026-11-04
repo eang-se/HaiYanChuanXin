@@ -179,4 +179,4 @@ function Get-HaiYanLauncherPaths {
     return [pscustomobject]@{ ProjectRoot = $script:ProjectRoot; DataRoot = $script:DataRoot; SettingsFile = $script:SettingsFile }
 }
 
-Export-ModuleMember -Function Initialize-HaiYanLauncher,Test-HaiYanSettings,Get-HaiYanSettings,Save-HaiYanSettings,Get-HaiYanJava,Get-HaiYanJar,Get-HaiYanManagedProcess,Get-HaiYanUrl,Get-HaiYanLanUrls,Start-HaiYanBackend,Stop-HaiYanBackend,Get-HaiYanLauncherPaths
+Export-ModuleMember -Function Write-HaiYanJson,Initialize-HaiYanLauncher,Test-HaiYanSettings,Get-HaiYanSettings,Save-HaiYanSettings,Get-HaiYanJava,Get-HaiYanJar,Get-HaiYanManagedProcess,Get-HaiYanUrl,Get-HaiYanLanUrls,Start-HaiYanBackend,Stop-HaiYanBackend,Get-HaiYanLauncherPaths

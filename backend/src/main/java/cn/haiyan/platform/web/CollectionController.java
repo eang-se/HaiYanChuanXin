@@ -26,6 +26,23 @@ public class CollectionController {
  public record Input(String title,String description,String kind,boolean published,List<Long> workIds){}
  @PostMapping("/api/member/collections") @Transactional public Map<String,Object> create(Principal p,@RequestBody Input f){return save(null,p,f);}
  @PutMapping("/api/member/collections/{id}") @Transactional public Map<String,Object> update(@PathVariable long id,Principal p,@RequestBody Input f){return save(id,p,f);}
+ @DeleteMapping("/api/member/collections/{id}") @Transactional public void delete(@PathVariable long id,Principal p){
+  long author=s.memberId(p.getName());permissions.require(p.getName(),"COLLECTIONS");s.store().one("SELECT id FROM members WHERE id=? FOR UPDATE",author);
+  if(s.store().one("SELECT id FROM collections WHERE id=? AND author_id=? FOR UPDATE",id,author)==null)throw error(404,"找不到你的合集");
+  // Include draft-only selections so open editors and pending reviews cannot retain a deleted collection.
+  var affected=s.store().list("SELECT w.id FROM works w LEFT JOIN work_drafts d ON d.work_id=w.id WHERE w.author_id=? AND (w.collection_id=? OR JSON_UNQUOTE(JSON_EXTRACT(d.payload,'$.collectionId'))=?) FOR UPDATE",author,id,String.valueOf(id));
+  for(var row:affected){long wid=((Number)row.get("id")).longValue();
+   s.store().update("UPDATE works SET edit_revision=edit_revision+1,updated_at=updated_at WHERE id=? AND author_id=?",wid,author);
+   s.store().update("UPDATE work_drafts SET payload=JSON_SET(payload,'$.collectionId',0),revision=revision+1 WHERE work_id=? AND JSON_UNQUOTE(JSON_EXTRACT(payload,'$.collectionId'))=?",wid,String.valueOf(id));
+   s.store().update("UPDATE article_reviews SET status='SUPERSEDED',decided_at=CURRENT_TIMESTAMP WHERE work_id=? AND status='PENDING'",wid);
+  }
+  s.store().update("UPDATE works SET collection_id=NULL,collection_position=NULL,updated_at=updated_at WHERE collection_id=? AND author_id=?",id,author);
+  s.store().update("DELETE FROM collection_works WHERE collection_id=?",id);
+  s.store().update("DELETE wt FROM work_tags wt JOIN tags t ON t.id=wt.tag_id WHERE t.collection_id=? AND t.kind='COLLECTION'",id);
+  s.store().update("DELETE FROM tags WHERE collection_id=? AND kind='COLLECTION'",id);
+  s.store().update("DELETE FROM collections WHERE id=? AND author_id=?",id,author);
+ }
+
  private Map<String,Object> save(Long id,Principal p,Input f){
   long author=s.memberId(p.getName());permissions.require(p.getName(),"COLLECTIONS");s.store().one("SELECT id FROM members WHERE id=? FOR UPDATE",author);
   if(id!=null&&s.store().count("SELECT COUNT(*) FROM collections WHERE id=? AND author_id=?",id,author)==0)throw error(404,"找不到你的合集");

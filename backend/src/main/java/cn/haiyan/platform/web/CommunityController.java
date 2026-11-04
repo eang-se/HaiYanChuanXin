@@ -44,7 +44,7 @@ public class CommunityController {
     public record Profile(String penName,String bio,String signature){}
     @PutMapping("/api/member/profile")public void profile(Principal p,@RequestBody Profile f){
         String name=bounded(f.penName(),40,"笔名");if(name.isBlank())name=p.getName();
-        s.store().update("UPDATE members SET pen_name=?,bio=?,signature=?,profile_completed=TRUE,profile_prompt_seen=TRUE WHERE username=?",name,bounded(f.bio(),300,"简介"),bounded(f.signature(),120,"签名"),p.getName());
+        s.store().update("UPDATE members SET pen_name=?,bio=?,signature='',profile_completed=TRUE,profile_prompt_seen=TRUE WHERE username=?",name,bounded(f.bio(),500,"简介"),p.getName());
     }
     @PostMapping("/api/member/profile/reminder-dismiss")public void dismissProfile(Principal p){s.store().update("UPDATE members SET profile_prompt_seen=TRUE WHERE username=?",p.getName());}
     @GetMapping("/api/admin/overview")public Map<String,Object> overview(){var auth=org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();boolean admin=auth.getAuthorities().stream().anyMatch(a->"ROLE_ADMIN".equals(a.getAuthority()));boolean editor=auth.getAuthorities().stream().anyMatch(a->"ROLE_PUBLIC_STAFF".equals(a.getAuthority()));return Map.of("members",admin?s.store().list("SELECT id,username,pen_name,role,account_type,created_at FROM members WHERE deleted_at IS NULL ORDER BY id DESC"):List.of(),"works",admin||editor?s.decorate(s.store().list(WORK_SELECT+"WHERE w.status<>'DRAFT' ORDER BY w.id DESC LIMIT 100"),false):List.of(),"invitations",admin?s.store().list("SELECT id,label,max_uses,used_count,active,expires_at FROM invitations ORDER BY id DESC LIMIT 100"):List.of());}

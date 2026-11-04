@@ -11,7 +11,7 @@ export function canManage(section:AdminSection) {
   if(section==='settings')return admin||(staff&&user.value?.username==='haiyan_tech')
   return admin||staff
 }
-export function canAnnounce(){return isPersonalAdmin()||isPublicStaff()}
+export function canAnnounce(){return isPersonalAdmin()}
 export function useAdminAccess(){return {
   isAdmin:computed(()=>canManage('accounts')),
   isSuper:computed(()=>personalRole()==='SUPER_ADMIN'),

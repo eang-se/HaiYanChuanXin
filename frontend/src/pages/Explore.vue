@@ -1,13 +1,22 @@
 <script setup lang="ts">
-import { computed,ref,watch } from 'vue'
+import DraftLink from '../components/DraftLink.vue'
+import { computed,ref,watch,onMounted,onBeforeUnmount } from 'vue'
 import { useRoute,useRouter } from 'vue-router'
 import {api,genres,message,type Work,type Tag} from '../api'
 import Icon from '../components/Icon.vue'
 import WorkFeed from '../components/WorkFeed.vue'
+import WorkCard from '../components/WorkCard.vue'
+import {feedLayout} from '../composables/feedLayout'
 import LayoutSwitch from '../components/LayoutSwitch.vue'
 import WelcomeDialog from '../components/WelcomeDialog.vue'
+import '../explore.css'
 const route=useRoute(),router=useRouter(),isHome=computed(()=>route.path==='/')
 const works=ref<Work[]>([]),tags=ref<Tag[]>([]),loading=ref(true),error=ref(''),total=ref(0),q=ref(String(route.query.q||''))
+const libraryGenres=genres.filter(g=>g!=='公告')
+const mobileQuery=window.matchMedia('(max-width: 760px)'),mobile=ref(mobileQuery.matches)
+function updateMobile(event:MediaQueryListEvent){mobile.value=event.matches}
+onMounted(()=>mobileQuery.addEventListener('change',updateMobile))
+onBeforeUnmount(()=>mobileQuery.removeEventListener('change',updateMobile))
 const genre=computed(()=>String(route.query.genre||'全部')),page=computed(()=>Number(route.query.page)||1),activity=computed(()=>tags.value.find(t=>t.isActivity&&t.activityActive!==false))
 let sequence=0
 async function load(){const token=++sequence;loading.value=true;error.value='';try{const [w,t]=await Promise.all([api.get('/public/works',{params:{...route.query,genre:genre.value==='全部'?'':genre.value}}),api.get('/public/tags')]);if(token!==sequence)return;works.value=w.data.items;total.value=w.data.total;tags.value=t.data}catch(e){if(token===sequence)error.value=message(e)}finally{if(token===sequence)loading.value=false}}
@@ -16,7 +25,7 @@ watch(()=>route.query,load,{immediate:true})
 </script>
 <template><div class="container" :class="{'home-feed':isHome}"><WelcomeDialog v-if="isHome"/>
 <section v-if="isHome&&activity" class="activity-strip"><span class="tag-pill">正在征集</span><RouterLink :to="{path:'/explore',query:{tag:activity.id}}"><strong>{{activity.name}}</strong><span>{{activity.description}}</span></RouterLink><RouterLink to="/activities" class="strip-link">查看活动<Icon name="ArrowRight" :size="16"/></RouterLink></section>
-<section class="library-section"><div class="section-heading"><div><p class="eyebrow">{{isHome?'近期发表':'作品'}}</p><h2>{{isHome?'最新作品':'文库'}}<span class="section-count">{{total}} 篇</span></h2></div><RouterLink v-if="isHome" to="/explore" class="text-button">浏览全部<Icon name="ArrowUpRight" :size="16"/></RouterLink><form v-else class="search-box" @submit.prevent="filter({q})"><Icon name="Search" :size="17"/><input v-model="q" placeholder="搜索作品、作者或正文" aria-label="搜索作品"/><button type="submit">搜索</button></form></div>
-<LayoutSwitch/><div class="filter-bar"><div class="genre-tabs"><button v-for="g in genres" :key="g" :class="{selected:genre===g}" @click="filter({genre:g==='全部'?undefined:g})">{{g}}</button></div><select aria-label="排序方式" :value="route.query.sort||'latest'" @change="filter({sort:($event.target as HTMLSelectElement).value})"><option value="latest">最新发布</option><option value="popular">最多喜欢</option></select></div><div v-if="route.query.tag" class="library-active-tag">{{tags.find(t=>String(t.id)===String(route.query.tag))?.name||'相关作品'}} <button type="button" @click="filter({tag:undefined})">查看全部 ×</button></div>
-<div v-if="loading" class="empty-state">加载中…</div><div v-else-if="error" class="empty-state"><p>{{error}}</p><button class="button secondary" @click="load">重新加载</button></div><div v-else-if="!works.length" class="empty-state"><Icon name="BookOpen" :size="32"/><h3>暂无作品</h3><p>试试其他关键词或筛选条件。</p><RouterLink to="/write" class="button secondary">投稿</RouterLink></div><WorkFeed v-else :works="works"/><div v-if="total>12" class="pagination"><button :disabled="page===1" @click="filter({page:page-1})">上一页</button><span>{{page}} / {{Math.ceil(total/12)}}</span><button :disabled="page*12>=total" @click="filter({page:page+1})">下一页</button></div></section>
+<section class="library-section explore-library"><div class="section-heading"><div><p class="eyebrow">{{isHome?'近期发表':'作品'}}</p><h2>{{isHome?'最新作品':'文库'}}<span class="section-count">{{total}} 篇</span></h2></div><RouterLink v-if="isHome" to="/explore" class="text-button">浏览全部<Icon name="ArrowUpRight" :size="16"/></RouterLink><form v-else class="search-box" @submit.prevent="filter({q})"><Icon name="Search" :size="17"/><input v-model="q" placeholder="搜索作品、作者或正文" aria-label="搜索作品"/><button type="submit">搜索</button></form></div>
+<div class="library-controls"><LayoutSwitch/><div class="filter-bar"><div class="genre-tabs"><button v-for="g in libraryGenres" :key="g" :class="{selected:genre===g}" @click="filter({genre:g==='全部'?undefined:g})">{{g}}</button></div><select aria-label="排序方式" :value="route.query.sort||'latest'" @change="filter({sort:($event.target as HTMLSelectElement).value})"><option value="latest">最新发布</option><option value="popular">最多喜欢</option></select></div></div><div v-if="route.query.tag" class="library-active-tag">{{tags.find(t=>String(t.id)===String(route.query.tag))?.name||'相关作品'}} <button type="button" @click="filter({tag:undefined})">查看全部 ×</button></div>
+<div v-if="loading" class="empty-state">加载中…</div><div v-else-if="error" class="empty-state"><p>{{error}}</p><button class="button secondary" @click="load">重新加载</button></div><div v-else-if="!works.length" class="empty-state"><Icon name="BookOpen" :size="32"/><h3>暂无作品</h3><p>试试其他关键词或筛选条件。</p><DraftLink class="button secondary">投稿</DraftLink></div><div v-else-if="mobile&&feedLayout==='cards'" class="library-masonry"><div v-for="column in [0,1]" :key="column" class="library-masonry-column"><WorkCard v-for="(w,i) in works.filter((_,index)=>index%2===column)" :key="w.id" :work="w" :index="i*2+column"/></div></div><WorkFeed v-else :works="works"/><div v-if="total>12" class="pagination"><button :disabled="page===1" @click="filter({page:page-1})">上一页</button><span>{{page}} / {{Math.ceil(total/12)}}</span><button :disabled="page*12>=total" @click="filter({page:page+1})">下一页</button></div></section>
 </div></template>

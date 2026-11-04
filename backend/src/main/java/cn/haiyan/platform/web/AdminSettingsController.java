@@ -1,11 +1,13 @@
 package cn.haiyan.platform.web;
 import cn.haiyan.platform.service.*;
 import java.security.Principal;
+import java.io.IOException;
 import java.util.*;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.multipart.MultipartFile;
 import static cn.haiyan.platform.service.CommunityService.*;
 @RestController
 @RequestMapping("/api/admin")
@@ -56,8 +58,8 @@ public class AdminSettingsController {
   for(var e:f.permissions().entrySet())db.update("INSERT INTO member_permissions(member_id,permission_code,allowed) VALUES(?,?,?)",id,e.getKey(),e.getValue());
  }
  @GetMapping("/public-accounts") public List<Map<String,Object>> publicAccounts(){
-  var accounts=db.list("SELECT id,username,pen_name,account_type FROM members WHERE account_type='PUBLIC' AND deleted_at IS NULL ORDER BY id");
-  for(var account:accounts){long id=((Number)account.get("id")).longValue();account.put("memberIds",db.list("SELECT member_id FROM public_account_members WHERE public_member_id=? ORDER BY member_id",id).stream().map(row->((Number)row.get("memberId")).longValue()).toList());}
+  var accounts=db.list("SELECT id,username,pen_name,bio,avatar_url,account_type FROM members WHERE account_type='PUBLIC' AND deleted_at IS NULL ORDER BY id");
+  for(var account:accounts){long id=((Number)account.get("id")).longValue();account.put("avatarUrl",avatarUrl(id,null,"PUBLIC",account.get("username"),account.get("avatarUrl")));account.put("memberIds",db.list("SELECT member_id FROM public_account_members WHERE public_member_id=? ORDER BY member_id",id).stream().map(row->((Number)row.get("memberId")).longValue()).toList());}
   return accounts;
  }
  public record PublicMembers(List<Long> memberIds){}
@@ -76,6 +78,11 @@ public class AdminSettingsController {
   var result=new ArrayList<Map<String,Object>>();directory.groups().forEach((group,entries)->entries.forEach((qq,name)->result.add(Map.of("groupId",group,"qqNumber",qq,"name",name,"active",!disabled.contains(qq),"bound",bound.contains(qq)))));return result;
  }
  @GetMapping("/registration/qq-groups") public List<Map<String,Object>> groups(){return directory.groups().entrySet().stream().map(entry->Map.<String,Object>of("groupId",entry.getKey(),"count",entry.getValue().size())).toList();}
+ @PostMapping("/registration/qq-roster-file") public Map<String,Object> uploadRoster(@RequestParam MultipartFile file,@RequestParam(defaultValue="false") boolean replace,Principal principal) throws IOException {
+  if(!"SUPER_ADMIN".equals(actor(principal).get("role")))throw error(403,"只有超级管理员可以上传 QQ 名单");
+  if(file.isEmpty()||file.getSize()>1024*1024)throw error(400,"名单文件须为 1 MB 以内的 UTF-8 Markdown 文件");
+  return directory.upload(file.getOriginalFilename(),file.getBytes(),replace);
+ }
  public record QqImport(String groupId,List<String> qqNumbers){}
  @PostMapping("/registration/qq-allowlist") @Transactional public Map<String,Object> importQqs(@RequestBody QqImport f){
   if(f.qqNumbers()==null||f.qqNumbers().size()>1000)throw error(400,"每次最多导入 1000 个 QQ 号");

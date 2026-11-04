@@ -1,0 +1,45 @@
+/* Theme is applied only on mobile; the saved preference remains local to this browser. */
+@media(max-width:760px) and (prefers-color-scheme:dark){
+html{color-scheme:dark;--green:#9ac9a4;--ink:#e3ebe0;--muted:#aab8a9;--line:#35483c;--paper:#202d25;background:#131e18;color:var(--ink)}
+html body{background:#131e18;color:#e3ebe0}
+html :is(.site-shell,.main-content,.admin-shell,.editor-page){background:#131e18;color:#e3ebe0}
+html :is(.site-header,.mobile-tabbar){background:#1b2921!important;border-color:#35483c;color:#e3ebe0}
+html .brand>img,html .footer-title img{filter:brightness(0) saturate(100%) invert(83%) sepia(15%) saturate(425%) hue-rotate(78deg)}
+html :is(.home-welcome,.home-featured,.home-side-panel,.home-activity,.work-card,.work-row,.collection-card,.panel,.desk-hero,.desk-stats,.desk-shortcut,.desk-work-item,.desk-work-controls,.author-heading,.activity-card,.activities-state,.auth-panel,.admin-sidebar,.admin-surface,.admin-metric,.admin-entry,.admin-table-wrap,.table-wrap,.workspace-actions,.editor-paper,.editor-sidebar,.editor-notes,.editor-controls,.editor-toolbar,.block-menu,.reading-container,.reading-top,.reading-container>article,.reading-container .comments,.profile-modal,.share-dialog,.welcome-dialog,.identity-dialog,.management-dialog,.admin-dialog,.admin-dialog-inner,.layout-dialog,.layout-dialog-footer,.pen-dialog,.new-draft-dialog,.article-lightbox){background:#202e25!important;color:#e3ebe0;border-color:#3b4e41!important}
+html :is(.management-dialog>header,.admin-dialog-inner>header){background:#202e25!important;border-color:#3b4e41!important}
+html :is(.home-page h1,.home-page h2,.home-page h3,.explore-library h2,.page-title,.section-heading h2,.card-title,.reading-header h1,.author-page h1,.admin-page-heading h1,.admin-section-title h2,.admin-entry h3,.management-dialog h2,.admin-dialog h2,.editor-page h1,.editor-page h2){color:#e6eee3!important}
+html :is(.prose,.article-content,.tiptap,.comment p,.row-excerpt,.card-excerpt,.author-heading-main>p:last-child,.activity-card>p,.activities-page p,.admin-dialog p){color:#d0dbce!important}
+html :is(input:not([type=checkbox]),textarea,select){background-color:#19261e!important;color:#e3ebe0!important;border-color:#435747!important;box-shadow:none}
+html :is(.title-input,.search-box input){background:transparent!important}
+html :is(input,textarea)::placeholder{color:#98aa99}
+html :is(.search-box,.genre-tabs button,.view-switch,.explore-library .filter-bar select,.reading-header .genre-label,.reading-header .work-collection-property,.chapter-nav,.comment-login,.author-collections,.new-draft-file,.identity-option,.layout-sample,.prose blockquote,.prose pre,.article-toc-mobile button.active,.article-toc-side button.active,.work-collection-property,.admin-info,.admin-nav>a,.admin-checkbox,.editor-toolbar button.selected){background:#2a3b2e!important;color:#c9dbc8!important;border-color:#415746!important}
+html :is(.button,.mobile-tabbar .mobile-compose>span){background:#739e79!important;color:#101c14!important;border-color:#739e79!important}
+html :is(.button.secondary,.reading-actions button,.pagination button){background:#27382c!important;color:#d7e6d5!important;border-color:#4a6050!important}
+html :is(.reading-actions button.selected,.genre-tabs button.selected,.identity-option.active,.view-switch button.selected){background:#496e50!important;color:#f0f7ee!important}
+html :is(.quiet-note,.eyebrow,.row-meta,.card-meta,.reading-byline,.comment time,.footer-refresh,.footer-traffic,.desk-stats span,.admin-kicker,.admin-page-heading p,.field-help,.editor-bottom){color:#a7baa8!important}
+html :is(.reading-container .comments){border-top-color:#131e18!important}
+html :is(.reading-header,.reading-actions,.comment,.row-meta,.admin-table td,.admin-table th,.editor-toolbar,.editor-bottom,.author-page .row-meta){border-color:#3b4e41!important}
+html :is(.text-button,.back-link,.publisher-link,.work-byline,.work-collection-property>a){color:#b1d6b7!important}
+html :is(.new-draft-file small,.new-draft-dialog>p,.identity-dialog-header p){color:#a8bbaa}
+html :is(.tag-pill,.activity-tag-link,.genre-label,.status-badge,.manuscript-badge){background:#354d39!important;color:#c4ddc3!important;border-color:#4a6350!important}
+html .member-avatar{background:#3a4f3e;color:#d9ead8}
+html .editor-page{--editor-muted:#a8baa9;--editor-border:#3b4e41}
+}
+@media(max-width:760px) and (prefers-color-scheme:dark){
+html .home-page{--home-body:#c4d2c3;--home-secondary:#afc1af;--home-muted:#aabdaa}
+html :is(.desk-heading,.activities-intro,.home-pick,.home-featured-empty,.home-discover-panel,.home-current-issue,.settings-card,.document-import,.about-masthead,.about-seal-panel,.about-closing){background:#25362a!important;border-color:#405746!important;color:#e0eadc!important}
+html :is(.home-discover-tabs,.home-quick-links,.mobile-editor-jump button,.mobile-preview-toggle,.settings-icon,.block-insert-toggle,.toolbar-options,.content-tag-input,.activity-status,.about-editorial){background:#304534!important;color:#d5e5d2!important;border-color:#49604c!important}
+html :is(.home-discover-tabs button.selected,.home-quick-links button.selected,.desk-tabs button.selected){color:#cbe9cc!important;border-color:#9ac9a4!important}
+html :is(.home-page p,.home-page small,.home-date,.home-stats,.desk-page .page-description,.activity-card-footer,.settings-card p,.settings-card label){color:#b7cbb8!important}
+html :is(.settings-card h3,.activities-section-heading h2,.activity-card h2,.about-editorial h1,.about-editorial h2){color:#e6eee3!important}
+html :is(.editor-toolbar button,.mobile-preview-toggle,.activity-links>a,.desk-shortcut svg,.row-actions a,.row-actions button){color:#c0d8bf!important}
+}
+@media(max-width:760px) and (prefers-color-scheme:dark){
+html :is(.discover-empty strong,.discover-issue strong,.discover-picks article>a,.home-discover-panel h3){color:#d8e8d6!important}
+html :is(.discover-empty button,.discover-empty a,.discover-heading>a,.discover-heading>button,.discover-actions a,.home-more,.home-activity-read){color:#a9d2ad!important}
+html .discover-picks article{background:#304534!important}
+html .home-discover-tabs{background:transparent!important}
+html .home-discover-tabs button>span{background:#304534;color:#c5d9c4}
+html .home-discover-tabs button.selected>span{background:#4b7855;color:#fff}
+html .mobile-tabbar>a.selected{color:#b7dfbb}
+}

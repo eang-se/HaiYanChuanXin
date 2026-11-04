@@ -1,0 +1,19 @@
+<script setup lang="ts">
+import {computed,nextTick,onMounted,onBeforeUnmount,ref} from 'vue'
+import {genres} from '../api'
+import {canAnnounce} from '../composables/admin'
+import Icon from './Icon.vue'
+import type {NewDraftSetup} from '../article/newDraft'
+const emit=defineEmits<{close:[];start:[value:NewDraftSetup]}>()
+const title=ref(''),genre=ref('散文'),file=ref<File|null>(null),titleInput=ref<HTMLInputElement|null>(null)
+const choices=computed(()=>genres.filter(g=>g!=='全部'&&(g!=='公告'||canAnnounce())))
+function selectFile(event:Event){file.value=(event.target as HTMLInputElement).files?.[0]||null}
+function start(){emit('start',{title:title.value.trim()||'未命名草稿',genre:genre.value,file:file.value})}
+function keydown(event:KeyboardEvent){if(event.key==='Escape')emit('close')}
+onMounted(()=>{window.addEventListener('keydown',keydown);void nextTick(()=>{if(!window.matchMedia('(max-width: 760px)').matches)titleInput.value?.focus()})})
+onBeforeUnmount(()=>window.removeEventListener('keydown',keydown))
+</script>
+<template><div class="new-draft-backdrop" @click.self="emit('close')"><form class="new-draft-dialog" role="dialog" aria-modal="true" aria-labelledby="new-draft-title" @submit.prevent="start"><div class="new-draft-head"><div><span>NEW STORY</span><h2 id="new-draft-title">开始一篇新作品</h2></div><button type="button" aria-label="关闭" @click="emit('close')"><Icon name="X" :size="20"/></button></div><p>先给灵感一个名字，随时可以修改。</p><label for="new-title">作品标题 <small>选填</small></label><input id="new-title" ref="titleInput" v-model="title" maxlength="100" placeholder="留空则为未命名草稿"/><label for="new-genre">作品体裁</label><select id="new-genre" v-model="genre"><option v-for="item in choices" :key="item">{{item}}</option></select><label class="new-draft-file"><Icon name="Upload" :size="18"/><span><strong>{{file?file.name:'从文件导入'}}</strong><small>支持 DOCX、文字型 PDF、TXT，可选</small></span><input type="file" accept=".docx,.pdf,.txt" @change="selectFile"/></label><button v-if="file" type="button" class="new-draft-clear" @click="file=null">移除文件</button><button type="submit" class="button full-width new-draft-start">进入编辑器 <Icon name="ArrowRight" :size="16"/></button></form></div></template>
+<style scoped>
+.new-draft-backdrop{position:fixed;inset:0;z-index:210;display:flex;align-items:flex-end;justify-content:center;background:#142d2580;padding:12px}.new-draft-dialog{width:min(100%,480px);max-height:90dvh;overflow:auto;padding:22px 20px calc(20px + env(safe-area-inset-bottom,0px));border-radius:20px;background:#fff;box-shadow:0 15px 50px #102a2333}.new-draft-head{display:flex;justify-content:space-between;align-items:start}.new-draft-head span{font-size:10px;letter-spacing:1.4px;color:#8a9d88}.new-draft-head h2{font:500 23px/1.4 var(--serif);margin:4px 0}.new-draft-head button{padding:7px;color:#718572}.new-draft-dialog>p{font-size:12px;color:#859385;margin:4px 0 18px}.new-draft-dialog>label:not(.new-draft-file){display:flex;flex-direction:row;justify-content:space-between;margin:14px 0 7px;font-size:13px;color:#3a5845}.new-draft-dialog label small{color:#95a395}.new-draft-dialog>input,.new-draft-dialog>select{width:100%;height:46px;font-size:16px}.new-draft-file{position:relative;display:flex;flex-direction:row;align-items:center;gap:12px;margin:18px 0 0;padding:14px;border:1px dashed #cbd9c9;border-radius:12px;background:#f6f9f4;color:#477253}.new-draft-file span{display:flex;flex-direction:column;gap:3px;min-width:0}.new-draft-file strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}.new-draft-file small{font-size:11px}.new-draft-file input{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}.new-draft-clear{font-size:12px;color:#718572;padding:8px 0}.new-draft-start{margin-top:18px;min-height:46px;border-radius:10px}
+</style>

@@ -10,7 +10,7 @@ Initialize-HaiYanLauncher -ProjectRoot (Split-Path (Split-Path $PSScriptRoot -Pa
 
 $form = [Windows.Forms.Form]::new()
 $form.Text = '海燕传信 · 后端管理'
-$form.ClientSize = [Drawing.Size]::new(600, 490)
+$form.ClientSize = [Drawing.Size]::new(600, 540)
 $form.FormBorderStyle = 'FixedDialog'
 $form.MaximizeBox = $false
 $form.StartPosition = 'CenterScreen'
@@ -168,7 +168,9 @@ $null = Add-Button '重启后端' 378 384 160 {
         Start-Backend
     } catch { Show-Error $_ }
 }
-$footnote = Add-Label ('修改配置前先停止后端；首次局域网访问请点击“放行局域网”（需要管理员确认）。' + "`n" + '关闭此窗口后，后端会继续运行。') 32 439 535 46
+$null = Add-Button '服务器与 QQ 名单管理' 32 435 506 { Show-ServerManagement }
+. (Join-Path $PSScriptRoot 'ServerManagement.ps1')
+$footnote = Add-Label ('修改配置前先停止后端；首次局域网访问请点击“放行局域网”（需要管理员确认）。' + "`n" + '关闭此窗口后，后端会继续运行。') 32 486 535 46
 $footnote.Font = [Drawing.Font]::new('Microsoft YaHei UI', 9)
 $footnote.ForeColor = [Drawing.ColorTranslator]::FromHtml('#6c7a72')
 

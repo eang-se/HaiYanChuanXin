@@ -45,6 +45,8 @@
 
 桌面“海燕传信后端启动”已提供图形管理窗口，与 Realm 后端入口采用同类布局：可保存监听地址与端口，启动、停止、重启服务，打开网页、查看日志及手动放行局域网。双击后按上次保存的设置启动；关闭管理窗口不停止 Java 后端。默认仅本机 `127.0.0.1:8091`，局域网放行按钮需要用户确认管理员权限，仅允许专用网络中的本地子网访问。
 
+桌面窗口中的“服务器与 QQ 名单管理”支持 SSH 管理云端 systemd 服务、自定义远程命令，以及向本地或云端更新 QQ 名单并保留备份。连接准备、权限和名单格式见[桌面服务器管理说明](docs/DESKTOP_SERVER_MANAGEMENT.md)。
+
 图形入口源码在 `tools/backend-launcher/`，与命令行脚本共用 `.runtime/server.json`，设置单独保存在 `.runtime/backend-launcher/settings.json`。重建桌面入口可用 Windows PowerShell 执行 `tools/backend-launcher/Install-DesktopShortcut.ps1`。
 
 初始管理员用户名为 `admin`，随机密码保存在本机 `.local/admin-account.txt`。登录后进入“社务台 → 账户管理”管理角色、权限与公用身份授权，进入“站点设置”管理注册模式、QQ 名单和站点资料；首次空库启动才会创建管理员与示例作品，重复启动不会重置账号或数据。社务台页面与权限说明见 [社务台重构说明](docs/ADMIN_REDESIGN.md)。

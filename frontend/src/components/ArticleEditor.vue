@@ -15,7 +15,8 @@ import '../article/article.css'
 const props = defineProps<{modelValue:string; document?:JSONContent|null; disabled?:boolean; genre?:string; layout?:ArticleLayout;cover?:string}>()
 const presentation=computed(()=>resolveLayout(props.layout,props.genre))
 const emit = defineEmits<{ 'update:modelValue':[value:string]; 'update:document':[value:JSONContent]; count:[value:number]; pending:[value:boolean]; composition:[value:boolean] }>()
-const preview = ref(false), imageInput = ref<HTMLInputElement|null>(null), insertButton = ref<HTMLButtonElement|null>(null)
+const toolbarOpen=ref(false)
+const preview = ref(false), imageInput = ref<HTMLInputElement|null>(null), insertButton = ref<HTMLButtonElement|null>(null), mobileInsertButton = ref<HTMLButtonElement|null>(null)
 const uploading = ref(false), uploadError = ref(''), failedFile = ref<File|null>(null), composing = ref(false)
 const sizes=reactive<Record<string,number>>({}),budgetError=ref('')
 const imageSources=computed(()=>{
@@ -116,7 +117,8 @@ function closeMenu() { dismissedAt=editor.value?.state.selection.from || null; m
 function toggleMenu() {
   if(menu.value){closeMenu();return}
   slashFrom.value=null; menuIndex.value=0
-  if(insertButton.value)positionMenu(insertButton.value.getBoundingClientRect())
+  const trigger=mobileInsertButton.value?.getClientRects().length?mobileInsertButton.value:insertButton.value
+  if(trigger)positionMenu(trigger.getBoundingClientRect())
   menu.value=true
   void nextTick(() => document.getElementById('article-insert-0')?.focus({preventScroll:true}))
 }
@@ -198,6 +200,7 @@ defineExpose({
     target.animate([{outline:'3px solid #d99270',outlineOffset:'6px'},{outline:'3px solid #d99270',outlineOffset:'6px'},{outline:'3px solid transparent',outlineOffset:'6px'}],{duration:3500})
     return true
   },
+  togglePreview(){if(!props.disabled&&!composing.value){preview.value=!preview.value;closeMenu()}},
   preview,
 })
 </script>
@@ -205,18 +208,20 @@ defineExpose({
 <template>
   <div class="editor-controls">
   <div class="editor-toolbar" role="group" aria-label="正文格式工具">
-    <template v-if="!preview">
-      <button ref="insertButton" class="block-insert-toggle" aria-haspopup="menu" :aria-expanded="menu" :disabled="disabled" @click="toggleMenu"><Icon name="Plus"/>插入</button>
-      <button aria-label="加粗" title="加粗" :aria-pressed="editor?.isActive('bold')" :disabled="disabled" @click="editor?.chain().focus().toggleBold().run()"><Icon name="Bold"/></button>
-      <button aria-label="斜体" title="斜体" :aria-pressed="editor?.isActive('italic')" :disabled="disabled" @click="editor?.chain().focus().toggleItalic().run()"><Icon name="Italic"/></button>
+    <template v-if="!preview"><button ref="mobileInsertButton" type="button" class="mobile-quick-format block-insert-toggle" aria-label="插入内容" aria-haspopup="menu" :aria-expanded="menu" :disabled="disabled" @click="toggleMenu"><Icon name="Plus"/></button><button type="button" class="mobile-quick-format" aria-label="加粗" title="加粗" :aria-pressed="editor?.isActive('bold')" :disabled="disabled" @click="editor?.chain().focus().toggleBold().run()"><Icon name="Bold"/></button><button type="button" class="mobile-quick-format" aria-label="斜体" title="斜体" :aria-pressed="editor?.isActive('italic')" :disabled="disabled" @click="editor?.chain().focus().toggleItalic().run()"><Icon name="Italic"/></button><button type="button" class="mobile-quick-format" aria-label="撤销" title="撤销" :disabled="disabled||!editor?.can().undo()" @click="editor?.chain().focus().undo().run()"><Icon name="Undo"/></button><button type="button" class="mobile-quick-format" aria-label="重做" title="重做" :disabled="disabled||!editor?.can().redo()" @click="editor?.chain().focus().redo().run()"><Icon name="Redo"/></button><button type="button" class="mobile-quick-format" aria-label="插入图片" title="插入图片" :disabled="disabled||uploading" @click="imageInput?.click()"><Icon name="Image"/></button></template>
+    <button v-if="!preview" type="button" class="mobile-format-toggle" :aria-expanded="toolbarOpen" aria-controls="format-options" aria-label="展开更多工具" @click="toolbarOpen=!toolbarOpen"><Icon :name="toolbarOpen?'X':'ArrowDown'" :size="17"/></button>
+    <div v-if="!preview" id="format-options" class="toolbar-options" :class="{'is-open':toolbarOpen}">
+      <button ref="insertButton" class="block-insert-toggle mobile-duplicate" aria-haspopup="menu" :aria-expanded="menu" :disabled="disabled" @click="toggleMenu"><Icon name="Plus"/>插入</button>
+      <button class="mobile-duplicate" aria-label="加粗" title="加粗" :aria-pressed="editor?.isActive('bold')" :disabled="disabled" @click="editor?.chain().focus().toggleBold().run()"><Icon name="Bold"/></button>
+      <button class="mobile-duplicate" aria-label="斜体" title="斜体" :aria-pressed="editor?.isActive('italic')" :disabled="disabled" @click="editor?.chain().focus().toggleItalic().run()"><Icon name="Italic"/></button>
       <button aria-label="小标题" title="小标题" :aria-pressed="editor?.isActive('heading',{level:2})" :disabled="disabled" @click="editor?.chain().focus().toggleHeading({level:2}).run()"><Icon name="Heading2"/></button>
       <button aria-label="引用" title="引用" :aria-pressed="editor?.isActive('blockquote')" :disabled="disabled" @click="editor?.chain().focus().toggleBlockquote().run()"><Icon name="Quote"/></button>
       <button aria-label="无序列表" title="无序列表" :aria-pressed="editor?.isActive('bulletList')" :disabled="disabled" @click="editor?.chain().focus().toggleBulletList().run()"><Icon name="List"/></button>
       <button aria-label="有序列表" title="有序列表" :aria-pressed="editor?.isActive('orderedList')" :disabled="disabled" @click="editor?.chain().focus().toggleOrderedList().run()">1.</button>
-      <button aria-label="插入图片" title="插入图片" :disabled="disabled||uploading" @click="imageInput?.click()"><Icon name="Image"/></button>
-      <button aria-label="撤销" title="撤销" :disabled="disabled||!editor?.can().undo()" @click="editor?.chain().focus().undo().run()"><Icon name="Undo"/></button>
-      <button aria-label="重做" title="重做" :disabled="disabled||!editor?.can().redo()" @click="editor?.chain().focus().redo().run()"><Icon name="Redo"/></button>
-    </template>
+      <button class="mobile-duplicate" aria-label="插入图片" title="插入图片" :disabled="disabled||uploading" @click="imageInput?.click()"><Icon name="Image"/></button>
+      <button class="mobile-duplicate" aria-label="撤销" title="撤销" :disabled="disabled||!editor?.can().undo()" @click="editor?.chain().focus().undo().run()"><Icon name="Undo"/></button>
+      <button class="mobile-duplicate" aria-label="重做" title="重做" :disabled="disabled||!editor?.can().redo()" @click="editor?.chain().focus().redo().run()"><Icon name="Redo"/></button>
+    </div>
     <button class="preview-toggle" :aria-pressed="preview" :disabled="disabled||composing" @click="preview=!preview;closeMenu()"><Icon :name="preview?'Feather':'BookOpen'" :size="14"/>{{preview?'继续编辑':'阅读预览'}}</button>
   </div>
   <div v-if="selectedImage&&!preview" class="image-controls" aria-label="图片显示设置"><span>图片宽度</span>

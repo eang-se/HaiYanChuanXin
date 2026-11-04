@@ -13,6 +13,7 @@ import BylinePicker from '../components/BylinePicker.vue'
 import {canAnnounce} from '../composables/admin'
 import PenNamesDialog from '../components/PenNamesDialog.vue'
 import CollectionsDialog from '../components/CollectionsDialog.vue'
+import {takeNewDraftSetup} from '../article/newDraft'
 const route=useRoute(),router=useRouter(),id=ref<number|undefined>(route.params.id?Number(route.params.id):undefined),tags=ref<Tag[]>([]),ready=ref(false),published=ref(false),busy=ref(false),importing=ref(false),uploading=ref(false),composing=ref(false),error=ref(''),saved=ref('尚未保存'),dirty=ref(false),count=ref(0),collections=ref<CollectionSummary[]>([]),penNames=ref<PenName[]>([])
 const form=reactive({title:'',byline:'佚名',bylineMode:'ANONYMOUS' as BylineMode,sourceNote:'',notes:'',genre:'散文',customGenre:'',layout:defaultLayout('散文'),excerpt:'',cover:'',body:'',bodyJson:null as JSONContent|null,activityIds:[] as number[],contentTags:[] as string[],collectionId:0,penNameId:0})
 function includeBoundPen(pen:PenName){if(!penNames.value.some(p=>p.id===pen.id))penNames.value.push(pen)}
@@ -20,6 +21,7 @@ const pensOpen=ref(false),collectionsOpen=ref(false),createCollection=ref(false)
 function updatePenNames(names:PenName[]){penNames.value=names;if(form.bylineMode==='BOUND'&&!names.some(p=>p.id===form.penNameId)){form.bylineMode='TEMPORARY';form.penNameId=0}}
 async function openCollections(create:boolean){await save(false,true);if(dirty.value||conflicted.value){notify('请先保存当前稿件后再管理合集');return}createCollection.value=create;collectionsOpen.value=true}
 async function collectionSaved(collectionId:number){try{collections.value=(await api.get('/member/collections')).data;if(id.value){const current=(await api.get(`/member/works/${id.value}/draft`)).data;draftRevision.value=current.draftRevision;if(!createCollection.value)form.collectionId=current.collectionId||0}if(createCollection.value)form.collectionId=collectionId}catch(e){error.value=message(e)}}
+async function collectionDeleted(deletedId:number){try{collections.value=(await api.get('/member/collections')).data;if(id.value){const current=(await api.get(`/member/works/${id.value}/draft`)).data;draftRevision.value=current.draftRevision}if(form.collectionId===deletedId)form.collectionId=0}catch(e){error.value=message(e)}}
 function addEditorCredit(){const name=user.value?.accountType==='PUBLIC'?(user.value.actorPenName||user.value.actorUsername):(user.value?.penName||user.value?.username);if(!name){notify('无法确认个人账号，请刷新后重试');return}const line=`本文编辑为：${name}`;if(form.notes.split('\n').some(value=>value.trim()===line)){notify('附注已包含当前编辑者');return}const value=form.notes?`${form.notes.replace(/\s+$/,'')}\n${line}`:line;if(value.length>4000){notify('附注字数不足，请先整理后再添加');return}form.notes=value;notify('已在附注添加编辑者')}
 const draftRevision=ref<number|undefined>(undefined),conflicted=ref(false)
 interface ModerationLocation {field:string;block:number|null;tag:string|null}
@@ -93,7 +95,10 @@ function save(publish=false,automatic=false,requestReview=false){
 }
 function toggleActivity(tag:number){form.activityIds=form.activityIds.includes(tag)?form.activityIds.filter(t=>t!==tag):[...form.activityIds,tag].slice(0,5)}
 async function importFile(event:Event){
-  const input=event.target as HTMLInputElement,file=input.files?.[0];input.value='';if(!file||importing.value||uploading.value)return
+  const input=event.target as HTMLInputElement,file=input.files?.[0];input.value='';if(file)await importDocument(file)
+}
+async function importDocument(file:File){
+  if(importing.value||uploading.value)return
   if(count.value&&!confirm('导入文字将替换当前正文，是否继续？'))return
   importing.value=true;clearTimeout(timer)
   importTask=(async()=>{try{
@@ -127,7 +132,10 @@ onMounted(async()=>{try{
     if(penNames.value.length){const first=penNames.value[0]!;form.penNameId=first.id;form.byline=first.name;form.bylineMode='BOUND'}
     if(route.query.tag){const activity=tags.value.find(t=>t.id===Number(route.query.tag));if(activity)form.activityIds=[activity.id];else notify('该活动当前不可参与，请选择其他开放活动')}
   }
+  const setup=!id.value?takeNewDraftSetup():null
+  if(setup){form.title=setup.title;form.genre=setup.genre;form.layout=defaultLayout(setup.genre)}
   await nextTick();ready.value=true
+  if(setup){changed();if(setup.file)await importDocument(setup.file)}
 }catch(e){error.value=message(e)}})
 function unload(e:BeforeUnloadEvent){if(dirty.value||tagInput.value.trim()||uploading.value||importing.value||composing.value){e.preventDefault();e.returnValue=''}}
 function restoreVersion(data:{body:string;bodyJson?:JSONContent|null}){if(!confirm('载入历史正文将替换当前编辑内容，是否继续？'))return;articleEditor.value?.replaceContent(data.body,data.bodyJson);changed()}
@@ -172,6 +180,7 @@ onBeforeUnmount(()=>{disposed=true;clearTimeout(timer);actionBarObserver?.discon
       <div class="writing-column">
         <div class="writing-heading">
           <div><Icon :name="preview?'BookOpen':'Feather'" :size="17"/><h2>{{preview?'阅读预览':'正文创作'}}</h2></div>
+          <button type="button" class="mobile-preview-toggle" :aria-pressed="preview" :disabled="!ready||composing" @click="articleEditor?.togglePreview()"><Icon :name="preview?'Feather':'BookOpen'" :size="15"/>{{preview?'继续编辑':'阅读预览'}}</button>
           <button class="focus-toggle" :aria-pressed="focused" aria-controls="work-settings" @click="focused=!focused"><Icon :name="focused?'Settings':'BookOpen'" :size="15"/>{{focused?'显示作品设置':'专注写作'}}</button>
         </div>
         <section class="editor-paper" aria-label="文章编辑区" :aria-busy="!ready||importing">
@@ -230,6 +239,6 @@ onBeforeUnmount(()=>{disposed=true;clearTimeout(timer);actionBarObserver?.discon
     </div>
     <input ref="fileInput" class="visually-hidden" type="file" accept=".docx,.pdf,.txt" @change="importFile"/>
   </div>
-<PenNamesDialog v-if="pensOpen" @close="pensOpen=false" @change="updatePenNames"/><CollectionsDialog v-if="collectionsOpen" :initial-id="createCollection?undefined:form.collectionId||undefined" :create="createCollection" @close="collectionsOpen=false" @saved="collectionSaved"/></template>
+<PenNamesDialog v-if="pensOpen" @close="pensOpen=false" @change="updatePenNames"/><CollectionsDialog v-if="collectionsOpen" :initial-id="createCollection?undefined:form.collectionId||undefined" :create="createCollection" @close="collectionsOpen=false" @saved="collectionSaved" @deleted="collectionDeleted"/></template>
 
 <style scoped src="../editor.css"></style>

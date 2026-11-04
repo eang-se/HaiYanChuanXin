@@ -41,6 +41,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/api/admin/accounts/*").hasRole("SUPER_ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/admin/works/*/approve").hasAnyRole("ADMIN","PUBLIC_STAFF")
                         .requestMatchers(HttpMethod.PUT, "/api/admin/public-accounts/*/members").hasRole("SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/admin/registration/qq-roster-file").hasRole("SUPER_ADMIN")
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .addFilterBefore(new org.springframework.web.filter.OncePerRequestFilter(){

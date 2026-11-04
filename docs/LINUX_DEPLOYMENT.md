@@ -52,7 +52,7 @@ artifact: backend/target/haiyan-chuanxin.jar
 ```bash
 sudo useradd --system --home-dir /var/lib/haiyan --shell /sbin/nologin haiyan
 sudo install -d -o root -g haiyan -m 0750 /opt/haiyan /opt/haiyan/releases /etc/haiyan
-sudo install -d -o haiyan -g haiyan -m 0750 /var/lib/haiyan /var/lib/haiyan/data /var/lib/haiyan/data/images /var/lib/haiyan/QQ_Whitelist
+sudo install -d -o haiyan -g haiyan -m 0750 /var/lib/haiyan /var/lib/haiyan/data /var/lib/haiyan/data/images /var/lib/haiyan/data/avatars /var/lib/haiyan/QQ_Whitelist
 ```
 
 JAR/发布目录由 root 管理并允许 haiyan 读取，应用不能修改自己的程序。current 链接指向当前提交的发布目录，例如首次配置使用 `sudo ln -s /opt/haiyan/releases/COMMIT /opt/haiyan/current`。`WorkingDirectory=/var/lib/haiyan` 不可遗漏：当前图片目录 data/images 是相对路径。
@@ -87,7 +87,7 @@ GRANT ALL PRIVILEGES ON haiyan_chuanxin.* TO 'haiyan_app'@'127.0.0.1';
 
 `--password` 不附值，使用交互输入或受限 MySQL option file。先创建 PRIVATE_BACKUP 私有目录，检查退出码和文件大小。使用 result-file 避免 PowerShell 重定向改变 SQL 编码。若库另有自建 routines/events，需另行核实权限并带上。
 
-同时打包 data/images/ 和 QQ_Whitelist/，保留文件名及结构。SMTP 授权码私有配置；备份经 SCP 加密传输，不进入公开仓库。
+同时打包 data/images/、data/avatars/ 和 QQ_Whitelist/，保留文件名及结构。公用账号自定义头像保存在 data/avatars/；超级管理员上传的 QQ 名单保存在 QQ_Whitelist/。SMTP 授权码私有配置；备份经 SCP 加密传输，不进入公开仓库。
 
 ### 云端恢复
 

@@ -122,3 +122,34 @@ test('unavailable traffic uses a placeholder and never fabricates a visitor coun
   await fixture(page,'offline');await page.goto('/#/explore');await expect(page.locator('.footer-traffic')).toContainText('统计暂不可用')
   await expect(page.locator('.footer-traffic strong').first()).toHaveText('—');await expect(page.locator('.footer-traffic strong').last()).toHaveText('—')
 })
+
+test('mobile discovery switches content and the feed stays in cards',async({page})=>{
+  await fixture(page);await page.setViewportSize({width:320,height:844});await page.goto('/#/')
+  const panel=page.locator('.home-discover-panel'),tabs=page.locator('.home-discover-tabs')
+  await expect(panel.getByRole('heading',{name:'海燕精选'})).toBeVisible()
+  await tabs.getByRole('button',{name:'活动',exact:true}).click();await expect(panel.getByRole('heading',{name:'秋日来信'})).toBeVisible()
+  await tabs.getByRole('button',{name:'随机文章',exact:true}).click();await expect(panel.getByRole('heading',{name:'偶然读到'})).toBeVisible();await expect(panel.locator('.discover-random article')).toHaveCount(3)
+  await tabs.getByRole('button',{name:'当期社刊',exact:true}).click();await expect(panel).toContainText('盐与糖')
+  await expect(page.locator('.home-feed-toolbar .view-switch')).toHaveCount(0);await expect(page.locator('.home-stream .work-card')).toHaveCount(9)
+  expect(await page.locator('.site-header').evaluate(el=>el.getBoundingClientRect().height)).toBe(60);await noOverflow(page)
+  await page.setViewportSize({width:1000,height:844});await expect(page.locator('.home-feed-toolbar .view-switch')).toBeVisible()
+})
+
+test('mobile library keeps dense rows and balanced independent cards',async({page})=>{
+  await fixture(page);await page.setViewportSize({width:320,height:844});await page.goto('/#/explore')
+  await expect(page.locator('.explore-library .work-row')).toHaveCount(12)
+  await expect(page.locator('.genre-tabs').getByRole('button',{name:'公告',exact:true})).toHaveCount(0)
+  await page.getByRole('button',{name:'卡片',exact:true}).click()
+  await expect(page.locator('.library-masonry .work-card')).toHaveCount(12)
+  const bounds=await page.locator('.library-masonry-column').evaluateAll(columns=>columns.map(column=>{const cards=[...column.children];return {top:cards[0].getBoundingClientRect().top,bottom:cards[cards.length-1].getBoundingClientRect().bottom,heights:cards.map(card=>card.getBoundingClientRect().height)}}))
+  expect(Math.abs(bounds[0].top-bounds[1].top)).toBeLessThan(1);expect(Math.abs(bounds[0].bottom-bounds[1].bottom)).toBeLessThan(1)
+  expect(new Set(bounds.flatMap(column=>column.heights)).size).toBeGreaterThan(1);await noOverflow(page)
+  await page.getByRole('button',{name:'诗歌',exact:true}).click();await expect(page).toHaveURL(/genre=/);await expect(page.locator('.library-masonry .work-card')).toHaveCount(9)
+  await page.getByRole('button',{name:'横条',exact:true}).click();await expect(page.locator('.explore-library .work-row')).toHaveCount(9)
+})
+
+test('mobile home writing links share the new draft dialog',async({page})=>{
+  await fixture(page);await page.setViewportSize({width:390,height:844});await page.goto('/#/')
+  await page.getByRole('link',{name:'写下此刻'}).click();const dialog=page.getByRole('dialog',{name:'开始一篇新作品'});await expect(dialog).toBeVisible();await dialog.getByRole('button',{name:'关闭'}).click()
+  await page.locator('.home-discover-tabs').getByRole('button',{name:'活动',exact:true}).click();await page.locator('.home-discover-panel').getByRole('link',{name:'参与写作'}).click();await expect(dialog).toBeVisible();await expect(page).toHaveURL(/#\/$/)
+})

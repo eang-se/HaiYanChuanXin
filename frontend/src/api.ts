@@ -9,7 +9,7 @@ export interface CollectionSummary {id:number;title:string;kind:string;published
 export interface Tag { id:number; name:string; description:string; isActivity:boolean; activityActive?:boolean; workCount:number; kind:'TOPIC'|'COLLECTION'; collectionId?:number }
 export interface Work { id:number; title:string; genre:string; customGenre?:string; layout?:ArticleLayout; excerpt:string; body:string; bodyJson?:JSONContent|null; draftRevision?:number; cover:string; status:string; penNameId:number|null; penNameWorkCount:number; collectionId:number|null; collectionPosition:number|null; collection:CollectionSummary|null; byline:string; displayByline:string; bylineMode?:BylineMode; sourceNote:string; notes:string; authorId:number; authorName:string; authorAvatar:string; authorAccountType?:string; authorVerified?:boolean; tags:Tag[]; wordCount:number; likes:number; commentCount:number; publishedAt:string; updatedAt:string; isDemo:boolean; liked:boolean; bookmarked:boolean }
 export const user=ref<Member|null>(null),notification=ref('')
-export const siteName=ref('海燕传信'),identityPrompt=ref(false)
+export const siteName=ref('海燕传信 - 海燕文学社综合活动平台'),identityPrompt=ref(false)
 let noticeTimer:ReturnType<typeof setTimeout>
 export function notify(message:string){notification.value=message;clearTimeout(noticeTimer);noticeTimer=setTimeout(()=>notification.value='',4000)}
 export const api=axios.create({baseURL:'/api',timeout:30000})

@@ -66,6 +66,17 @@ class SecurityConfigTest {
         mvc.perform(put("/api/member/profile").session(session).with(user("shared")).with(csrf())).andExpect(status().isForbidden());
         mvc.perform(put("/api/member/pen-names/5").session(session).with(user("shared")).with(csrf())).andExpect(status().isForbidden());
     }
+    @Test void rosterUploadsRequireSuperAdminAndPublicProfilesRequireAdmin() throws Exception {
+        var session=new MockHttpSession();session.setAttribute("actorUsername","alice");session.setAttribute("credentialHash","hash");
+        when(identities.actor(session,"alice")).thenReturn("alice");when(identities.current(session,1L,"alice")).thenReturn("alice");
+        for(String role:java.util.List.of("MEMBER","ADMIN","SUPER_ADMIN")){
+            when(store.one("SELECT id,role,password_hash,account_type FROM members WHERE username=? AND deleted_at IS NULL","alice")).thenReturn(Map.of("id",1L,"role",role,"passwordHash","hash","accountType","PERSONAL"));
+            mvc.perform(post("/api/admin/registration/qq-roster-file").session(session).with(user("alice")).with(csrf())).andExpect(role.equals("SUPER_ADMIN")?status().isNotFound():status().isForbidden());
+            mvc.perform(put("/api/admin/public-accounts/3/profile").session(session).with(user("alice")).with(csrf())).andExpect(role.equals("MEMBER")?status().isForbidden():status().isNotFound());
+            mvc.perform(post("/api/admin/public-accounts/3/avatar").session(session).with(user("alice")).with(csrf())).andExpect(role.equals("MEMBER")?status().isForbidden():status().isNotFound());
+        }
+        mvc.perform(post("/api/admin/registration/qq-roster-file").with(csrf())).andExpect(status().isUnauthorized());
+    }
     @Test
     void publicWorkspacesGrantOnlyTheirSpecificCapabilities() throws Exception {
         var session=new MockHttpSession();session.setAttribute("actorUsername","alice");session.setAttribute("credentialHash","hash");session.setAttribute("identityId",10L);
