@@ -56,7 +56,7 @@ public class AdminSettingsController {
 
   db.update("DELETE r FROM article_reviews r JOIN works w ON w.id=r.work_id WHERE w.author_id=? AND r.status='PENDING'",id);
   db.update("UPDATE works SET status='WITHDRAWN',edit_revision=edit_revision+1 WHERE author_id=? AND status IN ('PUBLISHED','UNPUBLISHED')",id);
-  db.update("UPDATE members SET deleted_at=CURRENT_TIMESTAMP,role='RESTRICTED',qq_number='' WHERE id=? AND deleted_at IS NULL",id);
+  db.update("UPDATE members SET deleted_at=CURRENT_TIMESTAMP,role='RESTRICTED',qq_number='',username=CONCAT('~deleted~',id) WHERE id=? AND deleted_at IS NULL",id);
  }
  @PutMapping("/accounts/{id}/permissions") @Transactional public void update(@PathVariable long id,@RequestBody PermissionInput f,Principal p){
   if(!List.of("SUPER_ADMIN","ADMIN","MEMBER","RESTRICTED").contains(f.role()==null?"":f.role()))throw error(400,"角色无效");
