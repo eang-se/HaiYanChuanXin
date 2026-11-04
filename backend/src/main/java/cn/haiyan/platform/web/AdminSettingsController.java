@@ -45,7 +45,18 @@ public class AdminSettingsController {
   db.update("DELETE FROM remembered_devices WHERE member_id=?",id);
   db.update("DELETE FROM password_reset_codes WHERE member_id=?",id);
   db.update("DELETE FROM member_permissions WHERE member_id=?",id);
-  db.update("UPDATE members SET deleted_at=CURRENT_TIMESTAMP,role='RESTRICTED' WHERE id=? AND deleted_at IS NULL",id);
+  db.update("DELETE FROM qq_invitation_bindings WHERE member_id=?",id);
+  // Delete private revisions for all of this account's works; retain published snapshots.
+  db.update("DELETE d FROM work_draft_media d JOIN works w ON w.id=d.work_id WHERE w.author_id=?",id);
+  db.update("DELETE d FROM work_drafts d JOIN works w ON w.id=d.work_id WHERE w.author_id=?",id);
+  db.update("DELETE vm FROM work_version_media vm JOIN work_versions v ON v.id=vm.version_id JOIN works w ON w.id=v.work_id WHERE w.author_id=? AND w.status='DRAFT'",id);
+  for(String table:List.of("work_tags","work_media","collection_works","reactions","comments"))
+   db.update("DELETE r FROM "+table+" r JOIN works w ON w.id=r.work_id WHERE w.author_id=? AND w.status='DRAFT'",id);
+  db.update("DELETE FROM works WHERE author_id=? AND status='DRAFT'",id);
+
+  db.update("DELETE r FROM article_reviews r JOIN works w ON w.id=r.work_id WHERE w.author_id=? AND r.status='PENDING'",id);
+  db.update("UPDATE works SET status='WITHDRAWN',edit_revision=edit_revision+1 WHERE author_id=? AND status IN ('PUBLISHED','UNPUBLISHED')",id);
+  db.update("UPDATE members SET deleted_at=CURRENT_TIMESTAMP,role='RESTRICTED',qq_number='' WHERE id=? AND deleted_at IS NULL",id);
  }
  @PutMapping("/accounts/{id}/permissions") @Transactional public void update(@PathVariable long id,@RequestBody PermissionInput f,Principal p){
   if(!List.of("SUPER_ADMIN","ADMIN","MEMBER","RESTRICTED").contains(f.role()==null?"":f.role()))throw error(400,"角色无效");

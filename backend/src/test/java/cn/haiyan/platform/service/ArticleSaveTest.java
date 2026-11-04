@@ -27,6 +27,11 @@ class ArticleSaveTest {
     private final String mediaId="12345678-1234-1234-1234-123456789abc",src="/api/media/"+mediaId;
     private CommunityService.WorkInput input(String body,boolean publish) {return new CommunityService.WorkInput("河岸","散文","",body,"",List.of(),List.of(),publish,"作者","","");}
     private void prepare(){doReturn(29L).when(service).memberId("editor");when(db.count("SELECT COUNT(*) FROM works WHERE id=? AND author_id=?",55L,29L)).thenReturn(1L);}
+    @Test void saveIsRejectedWhenAccountWasDeletedWhileWaitingForOwnerLock(){
+        prepare();when(db.count("SELECT COUNT(*) FROM members WHERE id=? AND deleted_at IS NOT NULL",29L)).thenReturn(1L);
+        assertEquals(403,assertThrows(ResponseStatusException.class,()->service.save(55L,"editor",input("<p>正文</p>",true))).getStatusCode().value());
+        verify(db,never()).update(startsWith("UPDATE works"),any(Object[].class));
+    }
     @Test void savesCaptionAndFoldedTextIntoSearchExcerptAndMediaRelations(){
         prepare();when(db.count("SELECT COUNT(*) FROM media_files WHERE id=? AND owner_id=?",mediaId,29L)).thenReturn(1L);
         var captured=new AtomicReference<Object[]>();

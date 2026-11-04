@@ -24,8 +24,13 @@ class AccountDeletionTest {
         setup("SUPER_ADMIN","PERSONAL");var request=new MockHttpServletRequest();request.getSession().setAttribute("actorUsername","root");RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
         try{controller.deleteAccount(2L,()->"haiyan_activity");}finally{RequestContextHolder.resetRequestAttributes();}
         verify(db).update("DELETE FROM public_account_sessions WHERE actor_id=?",2L);verify(db).update("DELETE FROM public_account_members WHERE member_id=?",2L);verify(db).update("DELETE FROM remembered_devices WHERE member_id=?",2L);
-        verify(db).update("UPDATE members SET deleted_at=CURRENT_TIMESTAMP,role='RESTRICTED' WHERE id=? AND deleted_at IS NULL",2L);
-        verify(db,never()).update(startsWith("DELETE FROM works"),any(Object[].class));
+        verify(db).update("DELETE FROM qq_invitation_bindings WHERE member_id=?",2L);
+        verify(db).update("DELETE r FROM article_reviews r JOIN works w ON w.id=r.work_id WHERE w.author_id=? AND r.status='PENDING'",2L);
+        verify(db).update("UPDATE works SET status='WITHDRAWN',edit_revision=edit_revision+1 WHERE author_id=? AND status IN ('PUBLISHED','UNPUBLISHED')",2L);
+        verify(db).update("UPDATE members SET deleted_at=CURRENT_TIMESTAMP,role='RESTRICTED',qq_number='' WHERE id=? AND deleted_at IS NULL",2L);
+        verify(db).update("DELETE d FROM work_draft_media d JOIN works w ON w.id=d.work_id WHERE w.author_id=?",2L);
+        verify(db).update("DELETE d FROM work_drafts d JOIN works w ON w.id=d.work_id WHERE w.author_id=?",2L);
+        verify(db).update("DELETE FROM works WHERE author_id=? AND status='DRAFT'",2L);
     }
     @Test void administratorsCannotDeleteUsersAndPublicAccountsCannotBeDeleted(){
         setup("ADMIN","PERSONAL");assertThrows(ResponseStatusException.class,()->controller.deleteAccount(2L,()->"root"));

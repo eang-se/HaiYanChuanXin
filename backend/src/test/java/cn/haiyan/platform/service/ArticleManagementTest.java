@@ -15,13 +15,22 @@ class ArticleManagementTest {
     final CommunityStore db=mock(CommunityStore.class);
     final CommunityService service=new CommunityService(db,mock(WorkCollections.class),mock(AccountPermissions.class),mock(PenNames.class));
     void role(String role){SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("selected",null,List.of(new SimpleGrantedAuthority("ROLE_"+role))));}
-    void work(String status){when(db.one("SELECT author_id FROM works WHERE id=?",55L)).thenReturn(Map.of("authorId",29L));when(db.one("SELECT * FROM works WHERE id=? FOR UPDATE",55L)).thenReturn(Map.of("status",status,"title","来信","body","<p>原有公开正文</p>"));}
+    void work(String status){when(db.one("SELECT author_id FROM works WHERE id=?",55L)).thenReturn(Map.of("authorId",29L));when(db.one("SELECT * FROM works WHERE id=? FOR UPDATE",55L)).thenReturn(Map.of("authorId",29L,"status",status,"title","来信","body","<p>原有公开正文</p>"));}
     @AfterEach void cleanup(){SecurityContextHolder.clearContext();}
     @Test void publicStaffCanReviewButCannotDelete(){
         role("PUBLIC_STAFF");work("WITHDRAWN");service.reviewArticle(55L,true);
         verify(db).update("UPDATE works SET status='PUBLISHED',published_at=COALESCE(published_at,CURRENT_TIMESTAMP),edit_revision=edit_revision+1 WHERE id=?",55L);
         verify(db,never()).one(contains("work_drafts"),any(Object[].class));
         assertThrows(ResponseStatusException.class,()->service.deleteArticle(55L));
+    }
+    @Test void administratorsCannotPublishAnAuthorsHiddenArticle(){
+        role("ADMIN");work("UNPUBLISHED");assertThrows(ResponseStatusException.class,()->service.reviewArticle(55L,true));
+        verify(db,never()).update(startsWith("UPDATE works SET status='PUBLISHED'"),any(Object[].class));
+    }
+    @Test void deletedAuthorsArticlesCannotBeRepublished(){
+        role("ADMIN");work("WITHDRAWN");when(db.count("SELECT COUNT(*) FROM members WHERE id=? AND deleted_at IS NOT NULL",29L)).thenReturn(1L);
+        assertThrows(ResponseStatusException.class,()->service.reviewArticle(55L,true));
+        verify(db,never()).update(startsWith("UPDATE works SET status='PUBLISHED'"),any(Object[].class));
     }
     @Test void administratorDeletionCleansVersionMediaAndRelationsBeforeDeletingWork(){
         role("ADMIN");work("PUBLISHED");when(db.update("DELETE FROM works WHERE id=? AND status<>'DRAFT'",55L)).thenReturn(1);

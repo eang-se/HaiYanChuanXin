@@ -81,8 +81,11 @@ public class CommunityService {
     @Transactional public void withdraw(long id,String username) {
         long author=memberId(username);permissions.require(username,"WRITE");
         db.one("SELECT id FROM members WHERE id=? FOR UPDATE",author);
-        if(db.one("SELECT id FROM works WHERE id=? AND author_id=? FOR UPDATE",id,author)==null)throw error(404,"找不到你的稿件");
-        db.update("UPDATE works SET status='WITHDRAWN',edit_revision=edit_revision+1 WHERE id=?",id);
+        var work=db.one("SELECT status FROM works WHERE id=? AND author_id=? FOR UPDATE",id,author);
+        if(work==null)throw error(404,"找不到你的稿件");
+        if("UNPUBLISHED".equals(work.get("status")))return;
+        if(!"PUBLISHED".equals(work.get("status")))throw error(409,"只有已公开的文章可以设为未公开");
+        db.update("UPDATE works SET status='UNPUBLISHED',edit_revision=edit_revision+1 WHERE id=?",id);
     }
     @Transactional
     public void deleteDraft(long id,String username) {
@@ -92,9 +95,9 @@ public class CommunityService {
         db.one("SELECT id FROM members WHERE id=? FOR UPDATE",author);
         var work=db.one("SELECT status FROM works WHERE id=? AND author_id=? FOR UPDATE",id,author);
         if(work==null)throw error(404,"找不到你的稿件");
-        if(!Set.of("DRAFT","WITHDRAWN").contains(String.valueOf(work.get("status"))))throw error(409,"请先撤回已发布作品，再删除稿件");
+        if(!Set.of("DRAFT","UNPUBLISHED","WITHDRAWN").contains(String.valueOf(work.get("status"))))throw error(409,"请先将已发布作品设为未公开，再删除稿件");
         deleteWorkRelations(id);
-        if(db.update("DELETE FROM works WHERE id=? AND author_id=? AND status IN ('DRAFT','WITHDRAWN')",id,author)!=1)throw error(409,"稿件状态已变化，请刷新后重试");
+        if(db.update("DELETE FROM works WHERE id=? AND author_id=? AND status IN ('DRAFT','UNPUBLISHED','WITHDRAWN')",id,author)!=1)throw error(409,"稿件状态已变化，请刷新后重试");
         // Uploaded files remain owned by the author and may be used by another work.
     }
     public record WorkInput(String title,String genre,String excerpt,String body,String cover,List<Long> tagIds,List<String> collectionTags,boolean publish,String byline,String sourceNote,String notes,String customGenre,ArticleLayout layout,Long collectionId,Long penNameId,Map<String,Object> bodyJson,Long draftRevision,List<Long> activityIds,List<String> contentTags,String bylineMode) {
@@ -114,6 +117,8 @@ public class CommunityService {
         long author=memberId(username);
         if(!reviewed) permissions.require(username,"WRITE");
         db.one("SELECT id FROM members WHERE id=? FOR UPDATE",author);
+        // Recheck after taking the owner lock: deletion may have committed while this save waited.
+        if(db.count("SELECT COUNT(*) FROM members WHERE id=? AND deleted_at IS NOT NULL",author)>0)throw error(403,"账号已注销，无法保存文章");
         if(id!=null)owner(id,author);
         String title=bounded(input.title(),100,"标题");
         var state=id==null?null:db.one("SELECT status,edit_revision FROM works WHERE id=? FOR UPDATE",id);
@@ -247,6 +252,8 @@ public class CommunityService {
         var work=lockManagedWork(id);String target=approve?"PUBLISHED":"WITHDRAWN";
         if(target.equals(work.get("status")))return;
         if(approve){
+            if("UNPUBLISHED".equals(work.get("status")))throw error(409,"作者已设为未公开，不能代为发布");
+            if(db.count("SELECT COUNT(*) FROM members WHERE id=? AND deleted_at IS NOT NULL",work.get("authorId"))>0)throw error(409,"作者账号已注销，不能重新上架文章");
             var body=WorkHtml.clean(String.valueOf(work.get("body")));String title=String.valueOf(work.get("title"));
             if(title.isBlank()||body.text().isBlank())throw error(400,"标题和正文不能为空");
             // Review restores the last submitted public snapshot, never its private draft.

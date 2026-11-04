@@ -21,5 +21,5 @@ export function useAdminAccess(){return {
   canConfigure:computed(()=>canManage('settings')),
 }}
 export const roleLabels:Record<string,string>={SUPER_ADMIN:'超级管理员',ADMIN:'管理员',MEMBER:'社员',RESTRICTED:'受限社员'}
-export const workStatusLabels:Record<string,string>={PUBLISHED:'已公开',DRAFT:'草稿',WITHDRAWN:'已下架 / 撤回'}
+export const workStatusLabels:Record<string,string>={PUBLISHED:'已公开',DRAFT:'草稿',WITHDRAWN:'下架',UNPUBLISHED:'未公开'}
 export function adminDate(value?:string){return value?new Date(value).toLocaleString('zh-CN',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}):'—'}
