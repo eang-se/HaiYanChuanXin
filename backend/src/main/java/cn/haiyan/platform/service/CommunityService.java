@@ -24,7 +24,7 @@ public class CommunityService {
     public static String avatarUrl(Object id,Object qq,Object type,Object username) { return avatarUrl(id,qq,type,username,null); }
     public static String avatarUrl(Object id,Object qq,Object type,Object username,Object custom) { if("PUBLIC".equals(type)){if(custom instanceof String url&&url.matches("/api/public/account-avatars/[0-9a-f-]{36}"))return url;return switch(String.valueOf(username)) {case "haiyan_official" -> "/brand/haiyan-seal.webp";case "haiyan_editor" -> "/brand/editorial-account.jpg";case "haiyan_tech" -> "/brand/tech-department.webp";case "haiyan_activity" -> "/brand/activity-account.webp";default -> "";};}return avatarUrl(id,qq); }
     public static final String AVATAR_SQL="CASE WHEN m.account_type='PUBLIC' THEN CASE WHEN m.avatar_url REGEXP '^/api/public/account-avatars/[0-9a-f-]{36}$' THEN m.avatar_url ELSE CASE m.username WHEN 'haiyan_official' THEN '/brand/haiyan-seal.webp' WHEN 'haiyan_editor' THEN '/brand/editorial-account.jpg' WHEN 'haiyan_tech' THEN '/brand/tech-department.webp' WHEN 'haiyan_activity' THEN '/brand/activity-account.webp' ELSE '' END END WHEN m.qq_number REGEXP '^[1-9][0-9]{4,11}$' THEN CONCAT('/api/public/avatars/',m.id) ELSE '' END";
-    public static final String WORK_SELECT="SELECT w.*,COALESCE(pn.name,NULLIF(w.byline,''),m.pen_name) AS display_byline,m.pen_name AS author_name,m.account_type AS author_account_type,"+AVATAR_SQL+" AS author_avatar,(SELECT COUNT(*) FROM works pw WHERE pw.pen_name_id=w.pen_name_id AND pw.status='PUBLISHED') AS pen_name_work_count,(SELECT COUNT(*) FROM reactions r WHERE r.work_id=w.id AND r.kind='LIKE') AS likes,(SELECT COUNT(*) FROM comments c WHERE c.work_id=w.id AND c.visible=TRUE) AS comment_count FROM works w JOIN members m ON m.id=w.author_id LEFT JOIN pen_names pn ON pn.id=w.pen_name_id ";
+    public static final String WORK_SELECT="SELECT w.*,COALESCE(pn.name,NULLIF(w.byline,''),m.pen_name) AS display_byline,COALESCE(m.pen_name,'未绑定账号') AS author_name,m.account_type AS author_account_type,"+AVATAR_SQL+" AS author_avatar,(SELECT COUNT(*) FROM works pw WHERE pw.pen_name_id=w.pen_name_id AND pw.status='PUBLISHED') AS pen_name_work_count,(SELECT COUNT(*) FROM reactions r WHERE r.work_id=w.id AND r.kind='LIKE') AS likes,(SELECT COUNT(*) FROM comments c WHERE c.work_id=w.id AND c.visible=TRUE) AS comment_count FROM works w LEFT JOIN members m ON m.id=w.author_id LEFT JOIN pen_names pn ON pn.id=w.pen_name_id ";
     // Lists never return the HTML body; avoid reading large MEDIUMTEXT values only to discard them.
     public static final String WORK_LIST_SELECT=WORK_SELECT.replace("SELECT w.*,", "SELECT w.id,w.author_id,w.title,w.genre,w.excerpt,w.plain_text,w.cover,w.status,w.featured,w.is_demo,w.created_at,w.updated_at,w.published_at,w.byline,w.source_note,w.notes,w.custom_genre,w.body_layout,w.collection_id,w.collection_position,w.pen_name_id,w.edit_revision,w.byline_mode,");
     public List<Map<String,Object>> decorate(List<Map<String,Object>> rows,boolean detail) {
@@ -53,7 +53,7 @@ public class CommunityService {
         for(var w:rows) {
             w.remove("editRevision");
             w.put("layout",ArticleLayout.decode(w.remove("bodyLayout"),String.valueOf(w.get("genre"))));
-            boolean own=viewer!=null&&((Number)w.get("authorId")).longValue()==viewer;
+            boolean own=viewer!=null&&w.get("authorId") instanceof Number authorId&&authorId.longValue()==viewer;
             w.put("tags",tagsByWork.getOrDefault(((Number)w.get("id")).longValue(),List.of()));
             Object collectionId=w.get("collectionId");
             var collection=collectionId instanceof Number n?collectionsById.get(n.longValue()):null;
@@ -72,7 +72,7 @@ public class CommunityService {
         var w=rows.getFirst();
         Long viewer=username==null?null:memberId(username);
         boolean published="PUBLISHED".equals(w.get("status"));
-        if(!published && (viewer==null || !Objects.equals(((Number)w.get("authorId")).longValue(),viewer)))throw error(404,"作品尚未公开");
+        if(!published && (viewer==null || !(w.get("authorId") instanceof Number authorId) || authorId.longValue()!=viewer))throw error(404,"作品尚未公开");
         decorate(rows,true,viewer);
         w.put("liked",viewer!=null && db.count("SELECT COUNT(*) FROM reactions WHERE member_id=? AND work_id=? AND kind='LIKE'",viewer,id)>0);
         w.put("bookmarked",viewer!=null && db.count("SELECT COUNT(*) FROM reactions WHERE member_id=? AND work_id=? AND kind='BOOKMARK'",viewer,id)>0);
@@ -159,7 +159,7 @@ public class CommunityService {
         for(String src:sources) {
             if(!src.matches(WorkHtml.MEDIA_PATH))throw error(400,"请使用平台上传的图片");
             String mediaId=src.substring(src.lastIndexOf('/')+1);
-            if(db.count("SELECT COUNT(*) FROM media_files WHERE id=? AND owner_id=?",mediaId,author)==0)throw error(400,"图片不存在或不属于当前账号");
+            if(db.count("SELECT COUNT(*) FROM media_files WHERE id=? AND owner_id=?",mediaId,author)==0 && (id==null||db.count("SELECT COUNT(*) FROM works w WHERE w.id=? AND w.author_id=? AND (EXISTS (SELECT 1 FROM work_media wm WHERE wm.work_id=w.id AND wm.media_id=?) OR EXISTS (SELECT 1 FROM work_version_media vm JOIN work_versions v ON v.id=vm.version_id WHERE v.work_id=w.id AND vm.media_id=?))",id,author,mediaId,mediaId)==0))throw error(400,"图片不存在或不属于当前账号");
             mediaIds.add(mediaId);
         }
         if(!mediaIds.isEmpty()){
@@ -240,7 +240,7 @@ public class CommunityService {
     private Map<String,Object> lockManagedWork(long id){
         var owner=db.one("SELECT author_id FROM works WHERE id=?",id);
         if(owner==null)throw error(404,"文章不存在");
-        db.one("SELECT id FROM members WHERE id=? FOR UPDATE",owner.get("authorId"));
+        if(owner.get("authorId")!=null)db.one("SELECT id FROM members WHERE id=? FOR UPDATE",owner.get("authorId"));
         var work=db.one("SELECT * FROM works WHERE id=? FOR UPDATE",id);
         if(work==null||"DRAFT".equals(work.get("status")))throw error(404,"文章不存在或尚未发布");
         return work;
@@ -255,7 +255,15 @@ public class CommunityService {
         if(target.equals(work.get("status")))return;
         if(approve){
             if("UNPUBLISHED".equals(work.get("status")))throw error(409,"作者已设为未公开，不能代为发布");
-            if(db.count("SELECT COUNT(*) FROM members WHERE id=? AND deleted_at IS NOT NULL",work.get("authorId"))>0)throw error(409,"作者账号已注销，不能重新上架文章");
+            if(work.get("authorId")!=null&&db.count("SELECT COUNT(*) FROM members WHERE id=? AND deleted_at IS NOT NULL",work.get("authorId"))>0)throw error(409,"作者账号已注销，不能重新上架文章");
+            if(work.get("authorId")==null){
+                var authentication=org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+                var selected=authentication==null?null:db.one("SELECT id FROM members WHERE username=? AND account_type='PUBLIC' AND deleted_at IS NULL",authentication.getName());
+                if(selected==null||!(selected.get("id") instanceof Number))throw error(403,"请先切换到公用账号，再重新上架未绑定文章");
+                Object publicId=selected.get("id");
+                db.update("UPDATE media_files f SET f.owner_id=? WHERE f.owner_id IS NULL AND (EXISTS (SELECT 1 FROM work_media wm WHERE wm.media_id=f.id AND wm.work_id=?) OR EXISTS (SELECT 1 FROM work_version_media vm JOIN work_versions v ON v.id=vm.version_id WHERE vm.media_id=f.id AND v.work_id=?))",publicId,id,id);
+                if(db.update("UPDATE works SET author_id=? WHERE id=? AND author_id IS NULL",publicId,id)!=1)throw error(409,"文章归属已变化，请刷新后重试");
+            }
             var body=WorkHtml.clean(String.valueOf(work.get("body")));String title=String.valueOf(work.get("title"));
             if(title.isBlank()||body.text().isBlank())throw error(400,"标题和正文不能为空");
             // Review restores the last submitted public snapshot, never its private draft.

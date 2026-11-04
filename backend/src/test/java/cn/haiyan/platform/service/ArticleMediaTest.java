@@ -24,6 +24,12 @@ class ArticleMediaTest {
         assertThrows(ResponseStatusException.class,()->uploads.imageSizes(id,()->"author"));
         assertThrows(ResponseStatusException.class,()->uploads.imageSizes("bad-id",()->"author"));
     }
+    @Test void metadataIsAvailableForAnImageAlreadyUsedByTheCurrentAccountsWork(){
+        String id="12345678-1234-1234-1234-123456789abc";
+        when(service.store()).thenReturn(store);when(service.memberId("author")).thenReturn(29L);
+        when(store.one(org.mockito.ArgumentMatchers.startsWith("SELECT f.size_bytes FROM media_files"),eq(id),eq(29L))).thenReturn(Map.of("sizeBytes",321L));
+        assertEquals(Map.of("/api/media/"+id,321L),uploads.imageSizes(id,()->"author"));
+    }
     @Test void serverRejectsDisguisedFilesOversizedFilesAndDimensions() throws Exception {
         assertThrows(ResponseStatusException.class,()->uploads.image(new MockMultipartFile("file","fake.png","image/png",new byte[]{1,2,3}),()->"author"));
         assertThrows(ResponseStatusException.class,()->uploads.image(new MockMultipartFile("file","large.png","image/png",new byte[5*1024*1024+1]),()->"author"));

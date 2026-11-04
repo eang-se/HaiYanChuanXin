@@ -23,6 +23,18 @@ class ArticleManagementTest {
         verify(db,never()).one(contains("work_drafts"),any(Object[].class));
         assertThrows(ResponseStatusException.class,()->service.deleteArticle(55L));
     }
+    @Test void orphanedWorkRequiresPublicIdentityAndIsClaimedWhenRepublished(){
+        var owner=new HashMap<String,Object>();owner.put("authorId",null);
+        var orphan=new HashMap<String,Object>(Map.of("status","WITHDRAWN","title","来信","body","<p>原有正文</p>"));orphan.put("authorId",null);
+        when(db.one("SELECT author_id FROM works WHERE id=?",55L)).thenReturn(owner);
+        when(db.one("SELECT * FROM works WHERE id=? FOR UPDATE",55L)).thenReturn(orphan);
+        role("ADMIN");assertThrows(ResponseStatusException.class,()->service.reviewArticle(55L,true));
+        when(db.one("SELECT id FROM members WHERE username=? AND account_type='PUBLIC' AND deleted_at IS NULL","selected")).thenReturn(Map.of("id",77L));
+        when(db.update("UPDATE works SET author_id=? WHERE id=? AND author_id IS NULL",77L,55L)).thenReturn(1);
+        role("PUBLIC_STAFF");service.reviewArticle(55L,true);
+        verify(db).update("UPDATE works SET author_id=? WHERE id=? AND author_id IS NULL",77L,55L);
+        verify(db).update("UPDATE works SET status='PUBLISHED',published_at=COALESCE(published_at,CURRENT_TIMESTAMP),edit_revision=edit_revision+1 WHERE id=?",55L);
+    }
     @Test void administratorsCannotPublishAnAuthorsHiddenArticle(){
         role("ADMIN");work("UNPUBLISHED");assertThrows(ResponseStatusException.class,()->service.reviewArticle(55L,true));
         verify(db,never()).update(startsWith("UPDATE works SET status='PUBLISHED'"),any(Object[].class));

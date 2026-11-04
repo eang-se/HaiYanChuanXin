@@ -60,7 +60,8 @@ public class UploadController {
         for(String id:new LinkedHashSet<>(Arrays.asList(values))){
             if(!("/api/media/"+id).matches(WorkHtml.MEDIA_PATH))throw error(400,"无效图片地址");
             var row=s.store().one("SELECT size_bytes FROM media_files WHERE id=? AND owner_id=?",id,owner);
-            if(row==null)throw error(404,"图片不存在或不属于当前账号");
+            if(row==null||!(row.get("sizeBytes") instanceof Number))row=s.store().one("SELECT f.size_bytes FROM media_files f WHERE f.id=? AND EXISTS (SELECT 1 FROM works w WHERE w.author_id=? AND (EXISTS (SELECT 1 FROM work_media wm WHERE wm.work_id=w.id AND wm.media_id=f.id) OR EXISTS (SELECT 1 FROM work_version_media vm JOIN work_versions v ON v.id=vm.version_id WHERE v.work_id=w.id AND vm.media_id=f.id)))",id,owner);
+            if(row==null||!(row.get("sizeBytes") instanceof Number))throw error(404,"图片不存在或不属于当前账号");
             result.put("/api/media/"+id,((Number)row.get("sizeBytes")).longValue());
         }
         return result;

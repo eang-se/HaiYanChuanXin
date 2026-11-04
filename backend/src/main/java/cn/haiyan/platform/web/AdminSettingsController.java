@@ -55,7 +55,11 @@ public class AdminSettingsController {
   db.update("DELETE FROM works WHERE author_id=? AND status='DRAFT'",id);
 
   db.update("DELETE r FROM article_reviews r JOIN works w ON w.id=r.work_id WHERE w.author_id=? AND r.status='PENDING'",id);
-  db.update("UPDATE works SET status='WITHDRAWN',edit_revision=edit_revision+1 WHERE author_id=? AND status IN ('PUBLISHED','UNPUBLISHED')",id);
+  // Keep only the visible text credit; detach the original account, bound pen name and collection.
+  db.update("DELETE c FROM collection_works c JOIN works w ON w.id=c.work_id WHERE w.author_id=?",id);
+  db.update("UPDATE media_files f SET f.owner_id=NULL WHERE f.owner_id=? AND (EXISTS (SELECT 1 FROM work_media wm JOIN works w ON w.id=wm.work_id WHERE wm.media_id=f.id AND w.author_id=?) OR EXISTS (SELECT 1 FROM work_version_media vm JOIN work_versions v ON v.id=vm.version_id JOIN works w ON w.id=v.work_id WHERE vm.media_id=f.id AND w.author_id=?))",id,id,id);
+  db.update("UPDATE works w JOIN members m ON m.id=w.author_id LEFT JOIN pen_names p ON p.id=w.pen_name_id SET w.byline=COALESCE(NULLIF(p.name,''),NULLIF(TRIM(w.byline),''),NULLIF(TRIM(m.pen_name),''),'佚名'),w.byline_mode=CASE WHEN COALESCE(NULLIF(p.name,''),NULLIF(TRIM(w.byline),''),NULLIF(TRIM(m.pen_name),''),'佚名')='佚名' THEN 'ANONYMOUS' ELSE 'TEMPORARY' END,w.pen_name_id=NULL,w.collection_id=NULL,w.collection_position=NULL,w.author_id=NULL,w.status='WITHDRAWN',w.edit_revision=w.edit_revision+1 WHERE w.author_id=?",id);
+  db.update("DELETE FROM member_pen_names WHERE member_id=?",id);
   db.update("UPDATE members SET deleted_at=CURRENT_TIMESTAMP,role='RESTRICTED',qq_number='',username=CONCAT('~deleted~',id) WHERE id=? AND deleted_at IS NULL",id);
  }
  @PutMapping("/accounts/{id}/permissions") @Transactional public void update(@PathVariable long id,@RequestBody PermissionInput f,Principal p){

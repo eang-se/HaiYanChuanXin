@@ -176,3 +176,15 @@ test('activity page shows an honest empty state and retries errors',async({page}
   fail=false;await page.getByRole('button',{name:'重新加载'}).click();await expect(page.locator('.activities-state')).toContainText('下一场相遇，正在酝酿');await expect(page.locator('.activities-count')).toHaveText('0 个主题')
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
 })
+
+
+test('empty body does not auto-create a draft, while manual save remains available',async({page})=>{
+  const saves=await editorFixture(page);await page.goto('/#/write')
+  await page.getByLabel('作品标题').fill('只有标题')
+  await expect(page.locator('.save-status')).toContainText('正文为空，未自动保存',{timeout:8000})
+  expect(saves).toHaveLength(0)
+  await page.getByRole('button',{name:'保存为草稿'}).click();await expect.poll(()=>saves.length).toBe(1)
+  await page.getByLabel('作品正文').click();await page.keyboard.insertText('正文开始。')
+  await expect.poll(()=>saves.length,{timeout:8000}).toBeGreaterThan(1)
+  expect(saves.at(-1)?.body).toContain('正文开始。')
+})

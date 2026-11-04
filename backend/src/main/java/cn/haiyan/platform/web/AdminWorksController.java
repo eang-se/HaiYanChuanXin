@@ -26,7 +26,7 @@ public class AdminWorksController {
         if(!status.isEmpty()){where+=" AND w.status=?";args.add(status);}
         if(!genre.isEmpty()){where+=" AND w.genre=?";args.add(genre);}
         if(featured)where+=" AND "+FEATURED;
-        long total=db.count("SELECT COUNT(*) FROM works w JOIN members m ON m.id=w.author_id LEFT JOIN pen_names pn ON pn.id=w.pen_name_id "+where,args.toArray());
+        long total=db.count("SELECT COUNT(*) FROM works w LEFT JOIN members m ON m.id=w.author_id LEFT JOIN pen_names pn ON pn.id=w.pen_name_id "+where,args.toArray());
         int currentPage=(int)Math.min(page,Math.max(1,(total+pageSize-1)/pageSize));
         String order=switch(sort){case "oldest"->"w.id ASC";case "newest"->"w.id DESC";default->"w.updated_at DESC,w.id DESC";};
         args.add(pageSize);args.add((currentPage-1)*pageSize);

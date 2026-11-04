@@ -3,6 +3,7 @@ import {ref,reactive,onMounted,onBeforeUnmount,watch,computed,nextTick} from 'vu
 import {useRoute,useRouter,onBeforeRouteLeave} from 'vue-router'
 import {api,user,message,notify,genres,type Tag,type Work,type PenName,type CollectionSummary,type BylineMode} from '../api'
 import {createSaveQueue} from '../article/saveQueue'
+import {articleFragment} from '../article/html'
 import ArticleEditor from '../components/ArticleEditor.vue'
 import ArticleLayoutMenu from '../components/ArticleLayoutMenu.vue'
 import {defaultLayout,resolveLayout} from '../article/layout'
@@ -71,7 +72,11 @@ function save(publish=false,automatic=false,requestReview=false){
     if(importTask)await importTask
     const imagesReady=await articleEditor.value?.settle()
     await nextTick()
-    if(automatic&&(!dirty.value||(!form.title&&!count.value)))return
+    if(automatic&&!dirty.value)return
+    if(automatic){
+      const body=articleFragment(form.body)
+      if(!body.textContent?.replace(/[\s\u200B\uFEFF]/g,'')&&!body.querySelector('img')){saved.value='正文为空，未自动保存';return}
+    }
     if(publish&&!imagesReady){error.value='图片尚未成功插入，请重试图片或取消本次图片后发布。正文可继续保存为草稿。';return}
     error.value=''
     const snapshot=JSON.stringify(form),payload=JSON.parse(snapshot)

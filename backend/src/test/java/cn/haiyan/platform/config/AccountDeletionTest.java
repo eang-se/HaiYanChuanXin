@@ -26,7 +26,9 @@ class AccountDeletionTest {
         verify(db).update("DELETE FROM public_account_sessions WHERE actor_id=?",2L);verify(db).update("DELETE FROM public_account_members WHERE member_id=?",2L);verify(db).update("DELETE FROM remembered_devices WHERE member_id=?",2L);
         verify(db).update("DELETE FROM qq_invitation_bindings WHERE member_id=?",2L);
         verify(db).update("DELETE r FROM article_reviews r JOIN works w ON w.id=r.work_id WHERE w.author_id=? AND r.status='PENDING'",2L);
-        verify(db).update("UPDATE works SET status='WITHDRAWN',edit_revision=edit_revision+1 WHERE author_id=? AND status IN ('PUBLISHED','UNPUBLISHED')",2L);
+        verify(db).update(startsWith("UPDATE works w JOIN members m ON m.id=w.author_id LEFT JOIN pen_names p"),eq(2L));
+        verify(db).update("DELETE FROM member_pen_names WHERE member_id=?",2L);
+        verify(db).update("DELETE c FROM collection_works c JOIN works w ON w.id=c.work_id WHERE w.author_id=?",2L);
         verify(db).update("UPDATE members SET deleted_at=CURRENT_TIMESTAMP,role='RESTRICTED',qq_number='',username=CONCAT('~deleted~',id) WHERE id=? AND deleted_at IS NULL",2L);
         verify(db).update("DELETE d FROM work_draft_media d JOIN works w ON w.id=d.work_id WHERE w.author_id=?",2L);
         verify(db).update("DELETE d FROM work_drafts d JOIN works w ON w.id=d.work_id WHERE w.author_id=?",2L);
