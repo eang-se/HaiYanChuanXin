@@ -50,15 +50,16 @@ test('administrators edit public profile and upload its avatar independently',as
  expect(state.profile).toEqual({penName:'编辑部新昵称',bio:'一段合并后的简介'})
 })
 
-test('super administrator uploads a group roster and site settings update the visible name',async({page})=>{
+test('super administrator uploads a group roster and site settings update the page title while the brand stays fixed',async({page})=>{
  const state=await fixture(page);await page.goto('/#/admin/settings?tab=qq')
  await page.getByLabel('选择名单文件').setInputFiles({name:'测试群.md',mimeType:'text/markdown',buffer:Buffer.from('234567 测试成员\n')})
  await page.getByRole('button',{name:'上传名单'}).click();await expect.poll(()=>state.rosterUploads).toBe(1)
  expect(state.rosterBody).toContain('234567');await expect(page.getByLabel('选择 QQ 群')).toHaveValue('测试群')
  await page.getByRole('button',{name:'站点资料'}).click();await page.getByLabel('站点名称').fill('海燕传信 - 新的平台名称 - 特别版')
  await page.getByRole('button',{name:'保存站点资料'}).click();await expect(page).toHaveTitle('海燕传信 - 新的平台名称 - 特别版')
- await expect(page.locator('.brand')).toHaveAttribute('aria-label','海燕传信 - 新的平台名称 - 特别版')
- await expect(page.locator('.brand small')).toHaveText('新的平台名称 - 特别版')
+ await expect(page.locator('.brand')).toHaveAttribute('aria-label','海燕传信')
+ await expect(page.locator('.brand small')).toHaveText('HAIYAN · LITERARY SOCIETY')
+ await expect(page.locator('.footer-title span')).toHaveText('海燕传信')
 })
 
 test('regular administrators cannot see the roster upload control; personal profile has one introduction field',async({page})=>{
