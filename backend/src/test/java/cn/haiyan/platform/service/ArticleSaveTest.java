@@ -56,11 +56,8 @@ class ArticleSaveTest {
         verify(db,never()).update(startsWith("UPDATE works"),any(Object[].class));
         assertDoesNotThrow(()->service.save(55L,"editor",input("<p>博彩、博彩、博彩</p>",false)));
     }
-    @Test void oneHighDensityInsultBlocksPublicationButNotDraftSaving(){
-        prepare();var warning=assertThrows(ArticleModerationWarning.class,()->service.save(55L,"editor",input("<p>操你妈</p>",true)));
-        assertEquals(422,warning.getStatusCode().value());
-        verify(db,never()).update(startsWith("UPDATE works"),any(Object[].class));
-        assertDoesNotThrow(()->service.save(55L,"editor",input("<p>操你妈</p>",false)));
+    @Test void quotedInsultDoesNotBlockArticlePublication(){
+        prepare();assertDoesNotThrow(()->service.save(55L,"editor",input("<p>操你妈</p>",true)));
     }
     @Test void totalImageLimitAppliesToDraftsAndPublishingBeforeAnyWrites(){
         prepare();when(db.count("SELECT COUNT(*) FROM media_files WHERE id=? AND owner_id=?",mediaId,29L)).thenReturn(1L);

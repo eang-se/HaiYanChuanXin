@@ -19,16 +19,16 @@ public final class ArticleModerationWarning extends ResponseStatusException {
     public List<String> structure(){return structure;}
     public static List<Location> locate(Document document,Map<String,String> fields){
         var found=new ArrayList<Location>();
-        fields.forEach((name,value)->{if(!ArticleModeration.checkMatch(value).isEmpty())found.add(new Location(name,null,null));});
+        fields.forEach((name,value)->{if(!ArticleModeration.checkArticleMatch(value).isEmpty())found.add(new Location(name,null,null));});
         var children=document.body().children();
         boolean bodyHit=false;
         for(int i=0;i<children.size();i++){
             var block=children.get(i);
-            if(!ArticleModeration.checkMatch(block.text()).isEmpty()){
+            if(!ArticleModeration.checkArticleMatch(block.text()).isEmpty()){
                 bodyHit=true;found.add(new Location("body",i+1,block.normalName()));
             }
         }
-        if(!bodyHit&&!ArticleModeration.checkMatch(document.text()).isEmpty())found.add(new Location("body",null,null));
+        if(!bodyHit&&!ArticleModeration.checkArticleMatch(document.text()).isEmpty())found.add(new Location("body",null,null));
         return found;
     }
 }

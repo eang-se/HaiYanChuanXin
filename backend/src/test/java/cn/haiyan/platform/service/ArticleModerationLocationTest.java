@@ -13,6 +13,10 @@ class ArticleModerationLocationTest {
   assertEquals(2,locations.size());
   assertFalse(locations.toString().contains("博彩"));
  }
+ @Test void benignBlocksAreNotHighlightedWhenAnotherBlockIsFlagged(){
+  var doc=WorkHtml.clean("<p>妹妹看电影，谈论基督教和死亡。</p><p>博彩、博彩、博彩。</p>");
+  assertEquals(List.of(new ArticleModerationWarning.Location("body",2,"p")),ArticleModerationWarning.locate(doc,Map.of()));
+ }
  @Test void listAndImageCaptionsAreLocatedAsEntireBlocks(){
   var doc=WorkHtml.clean("<ul><li><p>博彩内容</p></li></ul><figure><img src='/api/media/12345678-1234-1234-1234-123456789abc'><figcaption>博彩说明</figcaption></figure>");
   var locations=ArticleModerationWarning.locate(doc,Map.of());

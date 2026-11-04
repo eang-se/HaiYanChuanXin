@@ -22,7 +22,7 @@ class ArticleReviewServiceTest {
   assertTrue(ArticleModeration.check("河畔的风吹过校园").isEmpty());
   assertFalse(ArticleModeration.checkMatch("博彩").isEmpty());
   assertFalse(ArticleModeration.checkMatch("广告代理").isEmpty());
-  assertFalse(ArticleModeration.checkMatch("基督教").isEmpty());
+  assertTrue(ArticleModeration.checkArticleMatch("基督教").isEmpty());
   assertFalse(ArticleModeration.checkComment("你这个傻逼").isEmpty());
   assertTrue(ArticleModeration.checkComment("春天的校园很美").isEmpty());
  }
