@@ -45,4 +45,13 @@ class PenNamesTest {
   assertThrows(ResponseStatusException.class,()->pens.bind(29L,"新笔名"));
   verify(db,never()).update(anyString(),any(Object[].class));
  }
+ @Test void bindingLimitAndLengthAreEnforcedAtCharacterBoundaries(){
+  assertThrows(ResponseStatusException.class,()->pens.availability(29L,"中".repeat(11)));
+  assertThrows(ResponseStatusException.class,()->pens.bind(29L,"😀".repeat(11)));
+  assertEquals("AVAILABLE",pens.availability(29L,"😀".repeat(10)).get("status"));
+  when(db.one("SELECT p.id FROM pen_names p JOIN member_pen_names b ON b.pen_name_id=p.id WHERE b.member_id=? AND p.name=?",29L,"新笔名")).thenReturn(null);
+  when(db.count("SELECT COUNT(*) FROM member_pen_names WHERE member_id=?",29L)).thenReturn(3L);
+  assertThrows(ResponseStatusException.class,()->pens.bind(29L,"新笔名"));
+  verify(db,never()).update(startsWith("INSERT INTO pen_names"),any(Object[].class));
+ }
 }

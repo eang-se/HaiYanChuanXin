@@ -1,0 +1,7 @@
+import {test,expect} from '@playwright/test'
+test('all search categories return articles on desktop and mobile',async({page})=>{
+ const seen:string[]=[]
+ await page.route('**/api/**',async route=>{const url=new URL(route.request().url());if(url.pathname==='/api/auth/me')return route.fulfill({json:{}});if(url.pathname==='/api/public/site')return route.fulfill({json:{name:'海燕传信'}});if(url.pathname==='/api/public/traffic')return route.fulfill({json:{online:1,visitors:1}});if(url.pathname==='/api/public/search'){const type=url.searchParams.get('type')||'';seen.push(type);return route.fulfill({json:{items:[{id:1,title:`${type}文章`,genre:'诗歌',authorId:3,authorName:'YuI',displayByline:'叶央',excerpt:'文字',tags:[],collection:null,wordCount:4,likes:0,publishedAt:'2026-11-01'}],total:1}})}return route.fulfill({json:[],status:404})});
+ for(const width of [390,1100]){await page.setViewportSize({width,height:800});await page.goto('/#/search?q=秋');await expect(page.locator('.work-row')).toContainText('works文章');await page.getByRole('button',{name:'笔名与账号 按作者查找文章'}).click();await expect(page.locator('.work-row')).toContainText('authors文章');await page.getByRole('button',{name:'标签与活动 按主题查找文章'}).click();await expect(page.locator('.work-row')).toContainText('tags文章');expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)}
+ expect(seen).toEqual(['works','authors','tags','works','authors','tags'])
+})

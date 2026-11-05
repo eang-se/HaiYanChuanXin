@@ -9,5 +9,5 @@ proxy_set_header X-Forwarded-Port $server_port;
 proxy_set_header Forwarded "";
 proxy_set_header X-Forwarded-Prefix "";
 proxy_connect_timeout 5s;
-proxy_read_timeout 120s;
+proxy_read_timeout 210s;
 proxy_send_timeout 120s;

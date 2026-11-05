@@ -9,8 +9,9 @@ import static cn.haiyan.platform.service.CommunityService.*;
 @Service
 public class ArticleReviewService {
     private final CommunityService community;
+    private final ArticleReviewQuota quota;
     private static final ObjectMapper JSON=new ObjectMapper();
-    public ArticleReviewService(CommunityService community){this.community=community;}
+    public ArticleReviewService(CommunityService community,ArticleReviewQuota quota){this.community=community;this.quota=quota;}
     private WorkInput copy(WorkInput f,boolean publish,Long revision){
         return new WorkInput(f.title(),f.genre(),f.excerpt(),f.body(),f.cover(),f.tagIds(),f.collectionTags(),publish,f.byline(),f.sourceNote(),f.notes(),f.customGenre(),f.layout(),f.collectionId(),f.penNameId(),f.bodyJson(),revision,f.activityIds(),f.contentTags(),f.bylineMode());
     }
@@ -20,8 +21,9 @@ public class ArticleReviewService {
         if(Objects.requireNonNullElse(input.title(),"").isBlank()||plain.isBlank())throw error(400,"发布前请填写标题和正文");
         String text=String.join(" ",Objects.requireNonNullElse(input.title(),""),Objects.requireNonNullElse(input.byline(),""),Objects.requireNonNullElse(input.excerpt(),""),plain,Objects.requireNonNullElse(input.notes(),""),Objects.requireNonNullElse(input.sourceNote(),""),Objects.requireNonNullElse(input.customGenre(),""));
         if(text.indexOf('\u0000')>=0)throw error(400,"文本含有无效字符");
-        var findings=ArticleModeration.check(text);
-        if(findings.isEmpty())throw error(400,"此版本未触发内容检查，请直接发布");
+        var snapshot=community.prepareForAi(id,username,input);
+        quota.reserve(username,id,snapshot,true);
+        var findings=List.of("作者申请人工复核");
         var saved=community.save(id,username,copy(input,false,input.draftRevision()));
         long work=((Number)saved.get("id")).longValue(),revision=((Number)saved.get("draftRevision")).longValue();
         community.store().insert("INSERT INTO article_reviews(work_id,draft_revision,payload,findings) VALUES(?,?,?,?)",work,revision,JSON.writeValueAsString(copy(input,true,revision)),String.join("；",findings));

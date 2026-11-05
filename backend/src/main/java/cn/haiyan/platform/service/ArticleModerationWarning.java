@@ -10,8 +10,9 @@ public final class ArticleModerationWarning extends ResponseStatusException {
     public record Location(String field,Integer block,String tag) {}
     private final List<Location> locations;
     private final List<String> structure;
-    public ArticleModerationWarning(List<Location> locations,Document document){
-        super(HttpStatus.UNPROCESSABLE_ENTITY,"内容检查提示：疑似敏感或广告内容达到检查阈值。请修改后重试，或提交人工复核。");
+    public ArticleModerationWarning(List<Location> locations,Document document){this(locations,document,"内容检查提示：疑似敏感或广告内容达到检查阈值。请修改后重试，或提交人工复核。");}
+    public ArticleModerationWarning(List<Location> locations,Document document,String message){
+        super(HttpStatus.UNPROCESSABLE_ENTITY,message);
         this.locations=List.copyOf(locations);
         this.structure=document.body().children().stream().map(e->e.normalName()).toList();
     }

@@ -112,10 +112,71 @@ public class CommunityService {
         public WorkInput(String title,String genre,String excerpt,String body,String cover,List<Long> tagIds,List<String> collectionTags,boolean publish){this(title,genre,excerpt,body,cover,tagIds,collectionTags,publish,null,null);}
         public WorkInput(String title,String genre,String excerpt,String body,String cover,List<Long> tagIds,boolean publish){this(title,genre,excerpt,body,cover,tagIds,null,publish);}
     }
+    public record AiSnapshot(String body,Map<String,String> fields,String cover) {
+        public AiSnapshot(String body,Map<String,String> fields){this(body,fields,"");}
+    }
+    /** Read-only preparation. saveWithAi compares these exact fields again under the owner lock. */
+    public AiSnapshot prepareForAi(Long id,String username,WorkInput input){
+        long author=memberId(username);permissions.require(username,"WRITE");if(id!=null)owner(id,author);
+        var existing=id==null?null:db.one("SELECT byline,source_note,notes,genre,custom_genre,body_layout,pen_name_id,collection_id FROM works WHERE id=?",id);
+        String title=bounded(input.title(),100,"标题");
+        String byline=bounded(input.byline()==null&&existing!=null?(String)existing.get("byline"):input.byline(),120,"作者署名");
+        String sourceNote=bounded(input.sourceNote()==null&&existing!=null?(String)existing.get("sourceNote"):input.sourceNote(),500,"来源说明");
+        String notes=bounded(input.notes()==null&&existing!=null?(String)existing.get("notes"):input.notes(),4000,"附注");
+        if(!sourceNote.isBlank()&&!notes.contains(sourceNote))notes=bounded(notes.isBlank()?sourceNote:notes+"\n\n"+sourceNote,4000,"附注");
+        String mode=input.bylineMode();if(mode==null&&id!=null){var row=db.one("SELECT byline_mode FROM works WHERE id=?",id);if(row!=null)mode=(String)row.get("bylineMode");}
+        byline=WorkAttribution.resolve(penNames,author,mode,byline,input.penNameId(),existing).byline();
+        String genre=bounded(input.genre(),30,"体裁");if(genre.isBlank())genre="其他";
+        String custom=bounded(input.customGenre()==null&&existing!=null?(String)existing.get("customGenre"):input.customGenre(),30,"自定义体裁");
+        if(!Set.of("诗歌","散文","小说","随笔","公告","其他").contains(genre)){if(custom.isBlank())custom=genre;genre="其他";}
+        if(!genre.equals("其他"))custom="";
+        if("公告".equals(custom))throw error(400,"公告请使用专用文章类型");
+        if("公告".equals(genre))ManagementAccess.requireAdmin();
+        String excerpt=bounded(input.excerpt(),240,"摘要");String raw=Objects.requireNonNullElse(input.body(),"");
+        if(raw.length()>200000)throw error(400,"单篇正文请控制在 20 万字符以内");
+        var doc=WorkHtml.clean(raw);String body=doc.body().html();WorkDocument.validate(input.bodyJson(),body);
+        if(title.isBlank()||doc.text().isBlank())throw error(400,"发布前请填写标题和正文");
+        if((title+byline+excerpt+doc.text()+notes+custom).indexOf('\u0000')>=0)throw error(400,"文本含有无效字符");
+        return snapshot(body,title,byline,excerpt,notes,custom,Objects.requireNonNullElse(input.cover(),""));
+    }
+    private static AiSnapshot snapshot(String body,String title,String byline,String excerpt,String notes,String custom,String cover){
+        Map<String,String> fields=new LinkedHashMap<>();fields.put("title",title);fields.put("byline",byline);fields.put("excerpt",excerpt);fields.put("notes",notes);fields.put("customGenre",custom);
+        return new AiSnapshot(body,Map.copyOf(fields),cover);
+    }
+    /** Load only image files this author can use, before sending any bytes to the AI service. */
+    public List<AiArticleModeration.Image> prepareAiImages(Long id,String username,AiSnapshot snapshot){
+        long author=memberId(username);permissions.require(username,"WRITE");if(id!=null)owner(id,author);
+        var document=WorkHtml.clean(snapshot.body());var children=document.body().children();
+        Map<String,LinkedHashSet<String>> refs=new LinkedHashMap<>();
+        for(int i=0;i<children.size();i++)for(var image:children.get(i).select("img[src]"))refs.computeIfAbsent(image.attr("src"),k->new LinkedHashSet<>()).add("body:"+(i+1));
+        if(!snapshot.cover().isBlank())refs.computeIfAbsent(snapshot.cover(),k->new LinkedHashSet<>()).add("field:cover");
+        if(refs.size()>600)throw error(503,"图片数量过多，暂无法自动审核，请提交人工复核");
+        if(refs.isEmpty())return List.of();
+        try{
+            var root=java.nio.file.Path.of("data","images").toRealPath();long total=0;
+            var images=new ArrayList<AiArticleModeration.Image>();
+            for(var entry:refs.entrySet()){
+                String src=entry.getKey();if(!src.matches(WorkHtml.MEDIA_PATH))throw error(400,"请使用平台上传的图片");
+                String mediaId=src.substring(src.lastIndexOf('/')+1);
+                var row=db.one("SELECT owner_id,file_path FROM media_files WHERE id=?",mediaId);
+                if(row==null)throw error(400,"图片不存在或不属于当前账号");
+                boolean own=row.get("ownerId") instanceof Number n&&n.longValue()==author;
+                if(!own&&(id==null||db.count("SELECT COUNT(*) FROM works w WHERE w.id=? AND w.author_id=? AND (EXISTS (SELECT 1 FROM work_media wm WHERE wm.work_id=w.id AND wm.media_id=?) OR EXISTS (SELECT 1 FROM work_version_media vm JOIN work_versions v ON v.id=vm.version_id WHERE v.work_id=w.id AND vm.media_id=?))",id,author,mediaId,mediaId)==0))throw error(400,"图片不存在或不属于当前账号");
+                if(!(row.get("filePath") instanceof String file))throw error(503,"图片暂不可用，请稍后重试或提交人工复核");
+                var path=root.resolve(file).toRealPath();if(!path.startsWith(root)||!java.nio.file.Files.isRegularFile(path))throw error(503,"图片暂不可用，请稍后重试或提交人工复核");
+                long size=java.nio.file.Files.size(path);if(size<=0||(total+=size)>5L*1024*1024)throw error(400,"一篇文章的图片总大小不能超过 5 MB（含封面）");
+                byte[] bytes=java.nio.file.Files.readAllBytes(path);if(bytes.length!=size)throw error(503,"图片暂不可用，请稍后重试或提交人工复核");
+                images.add(new AiArticleModeration.Image(List.copyOf(entry.getValue()),bytes));
+            }
+            return List.copyOf(images);
+        }catch(java.io.IOException e){throw error(503,"图片暂不可用，请稍后重试或提交人工复核");}
+    }
     @Transactional
-    public Map<String,Object> save(Long id,String username,WorkInput input) { return saveInternal(id,username,input,false); }
-    Map<String,Object> saveReviewed(Long id,String username,WorkInput input) { return saveInternal(id,username,input,true); }
-    private Map<String,Object> saveInternal(Long id,String username,WorkInput input,boolean reviewed) {
+    public Map<String,Object> save(Long id,String username,WorkInput input) { return saveInternal(id,username,input,false,null); }
+    @Transactional
+    public Map<String,Object> saveWithAi(Long id,String username,WorkInput input,AiSnapshot checked) { if(checked==null||!input.publish())throw error(400,"审核信息无效");return saveInternal(id,username,input,false,checked); }
+    Map<String,Object> saveReviewed(Long id,String username,WorkInput input) { return saveInternal(id,username,input,true,null); }
+    private Map<String,Object> saveInternal(Long id,String username,WorkInput input,boolean reviewed,AiSnapshot checked) {
         long author=memberId(username);
         if(!reviewed) permissions.require(username,"WRITE");
         db.one("SELECT id FROM members WHERE id=? FOR UPDATE",author);
@@ -172,7 +233,8 @@ public class CommunityService {
         if(input.publish()) {
             String text=title+" "+byline+" "+excerpt+" "+plain+" "+notes+" "+customGenre;
             if(text.indexOf('\u0000')>=0)throw error(400,"文本含有无效字符");
-            var findings=ArticleModeration.check(text);
+            if(checked!=null&&!checked.equals(snapshot(body,title,byline,excerpt,notes,customGenre,cover)))throw error(409,"审核期间稿件资料发生变化，请重新检查后发布");
+            var findings=checked==null&&!reviewed?ArticleModeration.check(text):List.<String>of();
             if(!reviewed&&!findings.isEmpty()){
                 Map<String,String> fields=new LinkedHashMap<>();fields.put("title",title);fields.put("byline",byline);fields.put("excerpt",excerpt);fields.put("notes",notes);fields.put("customGenre",customGenre);
                 throw new ArticleModerationWarning(ArticleModerationWarning.locate(document,fields),document);

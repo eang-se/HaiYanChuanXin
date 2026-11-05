@@ -13,7 +13,8 @@ import static org.mockito.Mockito.*;
 class ArticleReviewServiceTest {
  private final CommunityStore db=mock(CommunityStore.class);
  private final CommunityService community=mock(CommunityService.class);
- private final ArticleReviewService reviews=new ArticleReviewService(community);
+ private final ArticleReviewQuota quota=mock(ArticleReviewQuota.class);
+ private final ArticleReviewService reviews=new ArticleReviewService(community,quota);
  @BeforeEach void init(){when(community.store()).thenReturn(db);}
  @AfterEach void cleanup(){SecurityContextHolder.clearContext();}
  private void role(String role){SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken("reviewer",null,List.of(new SimpleGrantedAuthority("ROLE_"+role))));}
@@ -32,9 +33,9 @@ class ArticleReviewServiceTest {
   assertEquals("PENDING",result.get("status"));
   verify(community).save(isNull(),eq("author"),argThat(f->!f.publish()));
   verify(community,never()).saveReviewed(anyLong(),anyString(),any());
-  verify(db).insert(startsWith("INSERT INTO article_reviews"),eq(7L),eq(1L),anyString(),contains("开源词库"));
+  verify(db).insert(startsWith("INSERT INTO article_reviews"),eq(7L),eq(1L),anyString(),contains("作者申请人工复核"));
  }
- @Test void unflaggedArticleCannotEnterAppeals(){assertThrows(ResponseStatusException.class,()->reviews.submit(null,"author",input("普通文章")));verify(community,never()).save(any(),anyString(),any());}
+ @Test void voluntaryReviewCanBeRequestedWhenAutomaticReviewIsUnavailable(){when(community.save(isNull(),eq("author"),any())).thenReturn(Map.of("id",7L,"draftRevision",1L));assertEquals("PENDING",reviews.submit(null,"author",input("普通文章")).get("status"));verify(community,never()).saveReviewed(anyLong(),anyString(),any());}
  @Test void reviewersCannotApproveChangedOrAlreadyHandledVersions(){
   role("PUBLIC_STAFF");when(db.one("SELECT work_id FROM article_reviews WHERE id=?",4L)).thenReturn(Map.of("workId",7L));
   when(db.one(startsWith("SELECT w.author_id"),eq(7L))).thenReturn(Map.of("authorId",9L,"username","author"));

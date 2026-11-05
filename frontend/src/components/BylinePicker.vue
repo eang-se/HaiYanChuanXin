@@ -16,7 +16,7 @@ function useBound(pen:PenName){emit('bound',pen);emit('update:mode','BOUND');emi
 function useAnonymous(){emit('update:mode','ANONYMOUS');emit('update:penNameId',0);emit('update:byline','佚名')}
 async function commit(){
   if(busy.value||composing.value)return;const name=draft.value.trim();if(!name||name.length>120||['佚名','署名待核'].includes(name)){error.value='请填写 1～120 字的临时署名；佚名请直接选择。';return}draft.value=name;error.value=''
-  if(!props.canBind){useTemporary(name);close();return}
+  if(!props.canBind||[...name].length>10){useTemporary(name);if(props.canBind)notify('笔名最多 10 个字符，已作为临时署名添加');close();return}
   busy.value=true
   try{const {data}=await api.get('/member/pen-names/availability',{params:{name}});if(disposed)return
     busy.value=false

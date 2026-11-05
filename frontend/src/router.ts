@@ -3,6 +3,7 @@ import { refreshAuth, user } from './api'
 import {canManage,type AdminSection} from './composables/admin'
 const router=createRouter({history:createWebHashHistory(),scrollBehavior:()=>({top:0}),routes:[
  {path:'/',component:()=>import('./pages/Home.vue')},{path:'/explore',component:()=>import('./pages/Explore.vue')},
+ {path:'/search',component:()=>import('./pages/Search.vue')},
  {path:'/about',component:()=>import('./pages/About.vue')},
  {path:'/activities',component:()=>import('./pages/Activities.vue')},{path:'/work/:id',component:()=>import('./pages/WorkDetail.vue')},
  {path:'/collections',component:()=>import('./pages/Collections.vue')},

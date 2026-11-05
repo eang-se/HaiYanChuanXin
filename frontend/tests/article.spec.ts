@@ -290,7 +290,7 @@ test('flagged publication offers a review request and retains the draft',async({
   })
   await page.goto('/#/write/42')
   await page.getByRole('button',{name:'检查并发布'}).click()
-  await expect(page.getByText('本地规则可能误判。你可以修改内容后重新发布，或将当前版本提交人工复核。')).toBeVisible()
+  await expect(page.getByText('自动检查可能误判。你可以修改内容后重新发布，或将当前版本提交人工复核。')).toBeVisible()
   await expect(page.getByText('标题',{exact:true})).toBeVisible()
   await page.getByRole('button',{name:'正文第 2 个块（段落） · 定位'}).click()
   await expect.poll(()=>page.locator('.tiptap > p:nth-child(2)').evaluate(node=>node.getAnimations().length)).toBeGreaterThan(0)
@@ -311,4 +311,23 @@ test('a blocked comment shows the reason and keeps the text for editing',async({
   await page.getByRole('button',{name:'发表评论'}).click()
   await expect(page.getByRole('alert')).toHaveText('评论包含敏感内容，无法发出，请修改后重试。')
   await expect(page.getByLabel('评论内容')).toHaveValue('含有敏感内容的评论')
+})
+
+test('unavailable article AI offers human review without publishing',async({page})=>{
+  await fixture(page,'<p>完整的文章正文。</p>');let submitted=false
+  await page.route('**/api/member/works/42/**',async route=>{
+    const path=new URL(route.request().url()).pathname
+    if(path.endsWith('/article-review'))return route.fulfill({json:{}})
+    if(path.endsWith('/article-reviews')&&route.request().method()==='POST'){submitted=true;return route.fulfill({json:{id:42,draftRevision:1,status:'PENDING'}})}
+    return route.fallback()
+  })
+  await page.route('**/api/member/works/42',async route=>{
+    if(route.request().method()==='PUT'&&route.request().postDataJSON().publish)return route.fulfill({status:422,json:{message:'自动审核暂不可用，可保存草稿或提交人工复核。',locations:[],structure:['p']}})
+    return route.fallback()
+  })
+  await page.goto('/#/write/42');await page.getByRole('button',{name:'检查并发布'}).click()
+  await expect(page.getByText('审核尚未完成，可稍后重试或提交人工复核。')).toBeVisible()
+  await page.getByRole('button',{name:'提交人工复核'}).click()
+  await expect(page.getByText('已提交人工复核，审核结果将在此显示。')).toBeVisible()
+  expect(submitted).toBe(true);await expect(page).toHaveURL(/write\/42/)
 })

@@ -59,6 +59,15 @@ class ArticleSaveTest {
     @Test void quotedInsultDoesNotBlockArticlePublication(){
         prepare();assertDoesNotThrow(()->service.save(55L,"editor",input("<p>操你妈</p>",true)));
     }
+    @Test void aiApprovedArticleIsNotRejectedByLegacyWordList(){
+        prepare();var approved=new CommunityService.AiSnapshot("<p>博彩、博彩、博彩</p>",Map.of("title","河岸","byline","作者","excerpt","","notes","","customGenre",""));
+        assertDoesNotThrow(()->service.saveWithAi(55L,"editor",input("<p>博彩、博彩、博彩</p>",true),approved));
+    }
+    @Test void changedArticleCannotBePublishedUsingOldAiApproval(){
+        prepare();var stale=new CommunityService.AiSnapshot("<p>旧正文</p>",Map.of("title","河岸","byline","作者","excerpt","","notes","","customGenre",""));
+        assertEquals(409,assertThrows(ResponseStatusException.class,()->service.saveWithAi(55L,"editor",input("<p>新正文</p>",true),stale)).getStatusCode().value());
+        verify(db,never()).update(startsWith("UPDATE works"),any(Object[].class));
+    }
     @Test void totalImageLimitAppliesToDraftsAndPublishingBeforeAnyWrites(){
         prepare();when(db.count("SELECT COUNT(*) FROM media_files WHERE id=? AND owner_id=?",mediaId,29L)).thenReturn(1L);
         when(db.count("SELECT COALESCE(SUM(size_bytes),0) FROM media_files WHERE id IN (?)",mediaId)).thenReturn(5L*1024*1024+1);

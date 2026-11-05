@@ -24,6 +24,7 @@ class AdminWorksControllerTest {
     @MockitoBean CommunityStore store;
     @MockitoBean IdentityService identities;
     @MockitoBean AccountPermissions permissions;
+    @MockitoBean ArticlePublicationService publication;
     @Test void publicBasicsAndPersonalAdministrativePowersAreIndependentOfIdentity() throws Exception {
         for(String role:List.of("MEMBER","RESTRICTED","ADMIN","SUPER_ADMIN"))for(String selected:List.of("actor","haiyan_official","haiyan_editor","haiyan_activity","haiyan_tech")){
             var session=identity(selected,role);boolean admin=Set.of("ADMIN","SUPER_ADMIN").contains(role),staff=!role.equals("RESTRICTED")&&!selected.equals("actor");

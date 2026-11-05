@@ -27,7 +27,7 @@ function addEditorCredit(){const name=user.value?.accountType==='PUBLIC'?(user.v
 const draftRevision=ref<number|undefined>(undefined),conflicted=ref(false)
 interface ModerationLocation {field:string;block:number|null;tag:string|null}
 const moderationWarning=ref(''),reviewSnapshot=ref(''),reviewStatus=ref(''),moderationLocations=ref<ModerationLocation[]>([]),moderationStructure=ref<string[]>([])
-const fieldLabels:Record<string,string>={title:'标题',byline:'署名',excerpt:'引言摘要',notes:'附注',customGenre:'具体体裁',body:'正文'}
+const fieldLabels:Record<string,string>={title:'标题',byline:'署名',excerpt:'引言摘要',notes:'附注',customGenre:'具体体裁',cover:'封面图片',body:'正文'}
 const blockLabels:Record<string,string>={p:'段落',h2:'小标题',h3:'小标题',blockquote:'引用',ul:'无序列表',ol:'有序列表',figure:'图片说明',pre:'代码块'}
 function locationLabel(item:ModerationLocation){return item.field==='body'&&item.block?`正文第 ${item.block} 个块（${blockLabels[item.tag||'']||'正文块'}）`:fieldLabels[item.field]||'文章内容'}
 async function revealLocation(item:ModerationLocation){if(item.field!=='body'||!item.block||!item.tag)return;const ok=await articleEditor.value?.revealBlock(item.block,item.tag,moderationStructure.value);if(!ok)notify('正文结构已变化，请重新检查并发布以定位位置')}
@@ -83,7 +83,7 @@ function save(publish=false,automatic=false,requestReview=false){
     saved.value='正在保存…'
     try{
       const body={...payload,publish,draftRevision:draftRevision.value}
-      const result=requestReview?await api.post(id.value?`/member/works/${id.value}/article-reviews`:'/member/article-reviews',body):id.value?await api.put(`/member/works/${id.value}`,body):await api.post('/member/works',body)
+      const result=requestReview?await api.post(id.value?`/member/works/${id.value}/article-reviews`:'/member/article-reviews',body):id.value?await api.put(`/member/works/${id.value}`,body,{timeout:210000}):await api.post('/member/works',body,{timeout:210000})
       id.value=result.data.id
       draftRevision.value=result.data.draftRevision??draftRevision.value
       dirty.value=JSON.stringify(form)!==snapshot
@@ -178,7 +178,7 @@ onBeforeUnmount(()=>{disposed=true;clearTimeout(timer);actionBarObserver?.discon
       </div>
     </div>
     <p v-if="error" class="error-message workspace-error" role="alert">{{error}}</p>
-    <div v-if="moderationWarning" class="error-message workspace-error" role="alert"><p>{{moderationWarning}}</p><div v-if="moderationLocations.length"><p>请检查以下位置（正文块从上到下计数，包含空行和图片）：</p><ul><li v-for="(item,index) in moderationLocations" :key="index"><button v-if="item.field==='body'&&item.block&&item.tag" type="button" class="moderation-location" @click="revealLocation(item)">{{locationLabel(item)}} · 定位</button><span v-else>{{locationLabel(item)}}{{item.field==='body'?'（可能涉及多个块）':''}}</span></li></ul></div><p v-else>无法精确定位，请检查文章各字段及相邻正文块。</p><p>本地规则可能误判。你可以修改内容后重新发布，或将当前版本提交人工复核。</p><button class="button secondary" :disabled="busy||JSON.stringify(form)!==reviewSnapshot" @click="save(true,false,true)">提交人工复核</button></div>
+    <div v-if="moderationWarning" class="error-message workspace-error" role="alert"><p>{{moderationWarning}}</p><div v-if="moderationLocations.length"><p>请检查以下位置（正文块从上到下计数，包含空行和图片）：</p><ul><li v-for="(item,index) in moderationLocations" :key="index"><button v-if="item.field==='body'&&item.block&&item.tag" type="button" class="moderation-location" @click="revealLocation(item)">{{locationLabel(item)}} · 定位</button><span v-else>{{locationLabel(item)}}{{item.field==='body'?'（可能涉及多个块）':''}}</span></li></ul></div><p v-else-if="moderationWarning.includes('暂不可用')">审核尚未完成，可稍后重试或提交人工复核。</p><p v-else>无法精确定位，请检查文章各字段及相邻正文块。</p><p>自动检查可能误判。你可以修改内容后重新发布，或将当前版本提交人工复核。</p><button class="button secondary" :disabled="busy||JSON.stringify(form)!==reviewSnapshot" @click="save(true,false,true)">提交人工复核</button></div>
     <p v-if="reviewStatus" class="admin-info" role="status">{{reviewStatus}}</p>
 
     <div class="editor-layout">

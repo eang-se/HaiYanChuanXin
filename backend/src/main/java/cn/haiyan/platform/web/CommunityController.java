@@ -8,8 +8,8 @@ import static cn.haiyan.platform.service.CommunityService.*;
 
 @RestController
 public class CommunityController {
-    private final CommunityService s;private final AccountPermissions permissions;
-    public CommunityController(CommunityService s,AccountPermissions permissions){this.s=s;this.permissions=permissions;}
+    private final CommunityService s;private final AccountPermissions permissions;private final ArticlePublicationService publication;
+    public CommunityController(CommunityService s,AccountPermissions permissions,ArticlePublicationService publication){this.s=s;this.permissions=permissions;this.publication=publication;}
     @GetMapping("/api/public/works") public Map<String,Object> works(@RequestParam(defaultValue="")String q,@RequestParam(defaultValue="")String genre,@RequestParam(required=false)Long tag,@RequestParam(required=false)Long author,@RequestParam(required=false)Long penName,@RequestParam(defaultValue="latest")String sort,@RequestParam(defaultValue="1")int page){
         String where="WHERE w.status='PUBLISHED'";List<Object> args=new ArrayList<>();
         if(!q.isBlank()){if(q.length()>100)throw error(400,"搜索词过长");where+=" AND (w.title LIKE ? OR w.plain_text LIKE ? OR w.byline LIKE ? OR m.pen_name LIKE ?)";for(int i=0;i<4;i++)args.add("%"+q+"%");}
@@ -25,14 +25,14 @@ public class CommunityController {
     @GetMapping("/api/public/works/{id}") public Map<String,Object> work(@PathVariable long id,Principal p){return s.work(id,p==null?null:p.getName());}
     @GetMapping("/api/public/tags") public List<Map<String,Object>> tags(){return s.store().list("SELECT t.*,(SELECT COUNT(*) FROM work_tags wt JOIN works w ON wt.work_id=w.id WHERE wt.tag_id=t.id AND w.status='PUBLISHED') AS work_count FROM tags t WHERE t.kind='TOPIC' ORDER BY t.is_activity DESC,t.id");}
     @GetMapping("/api/public/activities") public List<Map<String,Object>> activities(){return s.store().list("SELECT t.*,(SELECT COUNT(*) FROM work_tags wt JOIN works w ON wt.work_id=w.id WHERE wt.tag_id=t.id AND w.status='PUBLISHED') AS work_count FROM tags t WHERE t.kind='TOPIC' AND t.is_activity=TRUE AND t.activity_active=TRUE ORDER BY t.id DESC");}
-    @GetMapping("/api/public/authors/{id}")public Map<String,Object> author(@PathVariable long id){var a=s.store().one("SELECT m.id,m.pen_name,m.bio,m.account_type,"+AVATAR_SQL+" AS avatar_url,m.signature,m.created_at FROM members m WHERE m.id=?",id);if(a==null)throw error(404,"作者不存在");return a;}
+    @GetMapping("/api/public/authors/{id}")public Map<String,Object> author(@PathVariable long id){var a=s.store().one("SELECT m.id,m.pen_name,m.bio,m.account_type,"+AVATAR_SQL+" AS avatar_url,m.signature,m.created_at FROM members m WHERE m.id=?",id);if(a==null)throw error(404,"作者不存在");a.put("boundPenNames","PERSONAL".equals(a.get("accountType"))?s.store().list("SELECT p.id,p.name FROM pen_names p JOIN member_pen_names b ON b.pen_name_id=p.id WHERE b.member_id=? ORDER BY p.id",id):List.of());return a;}
     @GetMapping("/api/member/works")public List<Map<String,Object>> mine(Principal p){return s.decorate(s.store().list(WORK_LIST_SELECT+"WHERE author_id=? ORDER BY w.updated_at DESC",s.memberId(p.getName())),false,s.memberId(p.getName()));}
     @GetMapping("/api/member/works/{id}/draft")public Map<String,Object> draft(@PathVariable long id,Principal p){return s.draft(id,p.getName());}
     @GetMapping("/api/member/works/{id}/versions")public List<Map<String,Object>> versions(@PathVariable long id,Principal p){return s.versions(id,p.getName());}
     @GetMapping("/api/member/works/{id}/versions/{versionId}")public Map<String,Object> version(@PathVariable long id,@PathVariable long versionId,Principal p){return s.version(id,versionId,p.getName());}
     @GetMapping("/api/member/bookmarks")public List<Map<String,Object>> bookmarks(Principal p){return s.decorate(s.store().list(WORK_LIST_SELECT+"WHERE w.status='PUBLISHED' AND EXISTS(SELECT 1 FROM reactions r WHERE r.work_id=w.id AND r.member_id=? AND r.kind='BOOKMARK') ORDER BY w.published_at DESC",s.memberId(p.getName())),false,s.memberId(p.getName()));}
-    @PostMapping("/api/member/works")public Map<String,Object> create(Principal p,@RequestBody WorkInput f){return s.save(null,p.getName(),f);}
-    @PutMapping("/api/member/works/{id}")public Map<String,Object> update(@PathVariable long id,Principal p,@RequestBody WorkInput f){return s.save(id,p.getName(),f);}
+    @PostMapping("/api/member/works")public Map<String,Object> create(Principal p,@RequestBody WorkInput f){return publication.save(null,p.getName(),f);}
+    @PutMapping("/api/member/works/{id}")public Map<String,Object> update(@PathVariable long id,Principal p,@RequestBody WorkInput f){return publication.save(id,p.getName(),f);}
     @DeleteMapping("/api/member/works/{id}")public void deleteDraft(@PathVariable long id,Principal p){s.deleteDraft(id,p.getName());}
     @PostMapping("/api/member/works/{id}/withdraw")public void withdraw(@PathVariable long id,Principal p){s.withdraw(id,p.getName());}
     public record Reaction(String kind,boolean active){}

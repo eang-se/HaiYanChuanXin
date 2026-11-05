@@ -37,6 +37,11 @@ async function fixture(page:Page){
   return state
 }
 async function enterName(page:Page,name:string){await page.getByRole('button',{name:'添加临时署名'}).click();await page.getByRole('dialog',{name:'编辑临时署名'}).getByRole('textbox',{name:'临时署名',exact:true}).fill(name);await page.getByRole('button',{name:'使用此署名'}).click()}
+test('pen names and collection titles show their limits and prevent invalid submissions',async({page})=>{
+  const state=await fixture(page);state.pens.push({id:8,name:'远山',workCount:0},{id:9,name:'夜雨',workCount:0});await page.goto('/#/account');
+  await page.getByRole('button',{name:'管理绑定笔名',exact:true}).click();const pens=page.getByRole('dialog',{name:'管理绑定笔名'});await expect(pens).toContainText('最多绑定 3 个笔名');await expect(pens.getByRole('button',{name:'绑定',exact:true})).toBeDisabled();await pens.getByRole('button',{name:'关闭管理弹窗'}).click();
+  await page.getByRole('button',{name:'新建合集',exact:true}).click();const dialog=page.getByRole('dialog',{name:'创建与管理合集'});await dialog.getByLabel('合集名称').fill('字'.repeat(26));await dialog.getByRole('button',{name:'保存合集'}).click();await expect(dialog.getByRole('alert')).toContainText('最多 25 个字符');expect(state.collectionSaves).toHaveLength(0)
+})
 test('mobile layouts follow system theme changes despite old saved preferences',async({page})=>{
   await fixture(page);await page.setViewportSize({width:390,height:844});await page.emulateMedia({colorScheme:'light'});
   await page.addInitScript(()=>{localStorage.setItem('haiyan.feedLayout','cards');localStorage.setItem('haiyan.mobileTheme','light')});

@@ -46,7 +46,7 @@ public class CollectionController {
  private Map<String,Object> save(Long id,Principal p,Input f){
   long author=s.memberId(p.getName());permissions.require(p.getName(),"COLLECTIONS");s.store().one("SELECT id FROM members WHERE id=? FOR UPDATE",author);
   if(id!=null&&s.store().count("SELECT COUNT(*) FROM collections WHERE id=? AND author_id=?",id,author)==0)throw error(404,"找不到你的合集");
-  String title=bounded(f.title(),100,"合集名称"),description=bounded(f.description(),1000,"简介");if(title.isBlank())throw error(400,"请填写合集名称");
+  String title=Objects.requireNonNullElse(f.title(),"").trim(),description=bounded(f.description(),1000,"简介");if(title.codePointCount(0,title.length())>25)throw error(400,"合集名称最多 25 个字符");if(title.isBlank())throw error(400,"请填写合集名称");
   if(s.store().count("SELECT COUNT(*) FROM collections WHERE author_id=? AND title=? AND id<>?",author,title,id==null?0:id)>0)throw error(400,"已有同名合集，请使用其他名称");
   if(!List.of("连载","诗集","选集").contains(f.kind()==null?"":f.kind()))throw error(400,"请选择合集类型");
   List<Long> ids=f.workIds()==null?List.of():f.workIds();if(ids.size()>500||new HashSet<>(ids).size()!=ids.size())throw error(400,"合集最多 500 篇，篇目不能重复");

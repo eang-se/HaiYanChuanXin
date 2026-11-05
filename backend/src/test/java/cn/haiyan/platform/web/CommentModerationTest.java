@@ -12,7 +12,7 @@ class CommentModerationTest {
  private final CommunityService service=mock(CommunityService.class);
  private final AccountPermissions permissions=mock(AccountPermissions.class);
  private final CommunityStore store=mock(CommunityStore.class);
- private final CommunityController controller=new CommunityController(service,permissions);
+ private final CommunityController controller=new CommunityController(service,permissions,mock(ArticlePublicationService.class));
  private final Principal user=()->"author";
  @Test void sensitiveCommentsAreRejectedBeforeInsertion(){
   for(String text:new String[]{"博彩","广告代理","你这个傻逼"}){
